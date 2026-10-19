@@ -1,0 +1,46 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Dauhuniec: Debug",
+      "type": "cortex-debug",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "servertype": "stlink",
+      "device": "${config:dauhuniec.device}",
+      "interface": "swd",
+      "executable": "${config:dauhuniec.elf}",
+      "gdbPath": "${config:dauhuniec.gdb}",
+      "objdumpPath": "${config:dauhuniec.objdump}",
+      "nmPath": "${config:dauhuniec.nm}",
+      "serverPath": "${config:dauhuniec.server}",
+      "stm32cubeprogrammer": "${config:dauhuniec.programmerDir}",
+      "serverArgs": [
+        "-k"
+      ],
+      "runToEntryPoint": "main",
+      "preLaunchTask": "Dauhuniec: Build",
+      "postResetCommands": [
+        "monitor reset halt"
+      ]
+    },
+    {
+      "name": "Dauhuniec: Attach",
+      "type": "cortex-debug",
+      "request": "attach",
+      "cwd": "${workspaceFolder}",
+      "servertype": "stlink",
+      "device": "${config:dauhuniec.device}",
+      "interface": "swd",
+      "executable": "${config:dauhuniec.elf}",
+      "gdbPath": "${config:dauhuniec.gdb}",
+      "objdumpPath": "${config:dauhuniec.objdump}",
+      "nmPath": "${config:dauhuniec.nm}",
+      "serverPath": "${config:dauhuniec.server}",
+      "stm32cubeprogrammer": "${config:dauhuniec.programmerDir}",
+      "serverArgs": [
+        "-k"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "version": 4,
+  "configurations": [
+    {
+      "name": "Dauhuniec",
+      "compilerPath": "${config:dauhuniec.gcc}",
+      "compilerArgs": [],
+      "intelliSenseMode": "gcc-arm",
+      "cStandard": "gnu11",
+      "cppStandard": "gnu++17",
+      "defines": [],
+      "includePath": []
+    }
+  ]
+}

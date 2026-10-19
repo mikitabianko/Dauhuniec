@@ -1,0 +1,446 @@
+{
+  "name": "dauhuniec",
+  "displayName": "Dauhuniec",
+  "icon": "media/icon.png",
+  "description": "Dauhuniec: build, flash and debug STM32 CubeMX projects in VS Code with the lon CLI.",
+  "version": "0.1.0",
+  "publisher": "dauhuniec",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other",
+    "Debuggers"
+  ],
+  "keywords": [
+    "STM32",
+    "CubeMX",
+    "ST-LINK",
+    "embedded",
+    "ARM",
+    "dauhuniec",
+    "lon"
+  ],
+  "main": "./dist/extension.js",
+  "extensionKind": [
+    "workspace"
+  ],
+  "activationEvents": [
+    "onWebviewPanel:dauhuniec.serialMonitor",
+    "onStartupFinished",
+    "workspaceContains:**/*.ioc"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Dauhuniec runs the compiler and Makefile from the opened project."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "Native tools require a local filesystem."
+    }
+  },
+  "extensionPack": [
+    "ms-vscode.cpptools",
+    "marus25.cortex-debug"
+  ],
+  "packageManager": "pnpm@10.28.2",
+  "scripts": {
+    "compile": "tsc -p .",
+    "pretest": "node scripts/prepare.cjs",
+    "test": "pnpm run compile && node --test dist/test/service.test.js dist/test/userCode.test.js dist/test/cubeMX.test.js dist/test/serialConsole.test.js dist/test/targetBoard.test.js dist/test/documentation.test.js",
+    "vscode:prepublish": "pnpm run compile",
+    "package": "node scripts/prepare.cjs && vsce package --no-dependencies --allow-missing-repository --out ../releases/dauhuniec-0.1.0.vsix",
+    "test:host": "pnpm run compile && node scripts/test-host.cjs"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "1.95.0",
+    "@vscode/vsce": "^3.0.0",
+    "typescript": "^5.7.0"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "dauhuniec.configure",
+        "title": "Configure CubeMX Project",
+        "category": "Dauhuniec",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "dauhuniec.selectProject",
+        "title": "Select Project",
+        "category": "Dauhuniec",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "dauhuniec.refresh",
+        "title": "Refresh",
+        "category": "Dauhuniec",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "dauhuniec.check",
+        "title": "Check Environment",
+        "category": "Dauhuniec",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "dauhuniec.build",
+        "title": "Build",
+        "category": "Dauhuniec",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "dauhuniec.flash",
+        "title": "Build, Flash and Run",
+        "category": "Dauhuniec",
+        "icon": "$(circuit-board)"
+      },
+      {
+        "command": "dauhuniec.debug",
+        "title": "Start Debugging",
+        "category": "Dauhuniec",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "dauhuniec.clean",
+        "title": "Clean Build",
+        "category": "Dauhuniec",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "dauhuniec.probes",
+        "title": "List ST-LINK Probes",
+        "category": "Dauhuniec",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "dauhuniec.openIOC",
+        "title": "Open in STM32CubeMX / Create Project",
+        "category": "Dauhuniec",
+        "icon": "$(file-code)"
+      },
+      {
+        "command": "dauhuniec.guide",
+        "title": "Getting Started",
+        "category": "Dauhuniec",
+        "icon": "$(book)"
+      },
+      {
+        "command": "dauhuniec.logs",
+        "title": "Show Logs",
+        "category": "Dauhuniec",
+        "icon": "$(output)"
+      },
+      {
+        "command": "dauhuniec.chooseIDE",
+        "title": "Select CubeIDE Installation",
+        "category": "Dauhuniec"
+      },
+      {
+        "command": "dauhuniec.chooseMake",
+        "title": "Select GNU Make",
+        "category": "Dauhuniec"
+      },
+      {
+        "command": "dauhuniec.focusUserCode",
+        "title": "Focus on USER CODE",
+        "category": "Dauhuniec",
+        "icon": "$(fold)"
+      },
+      {
+        "command": "dauhuniec.showFullFile",
+        "title": "Show Full File",
+        "category": "Dauhuniec",
+        "icon": "$(unfold)"
+      },
+      {
+        "command": "dauhuniec.toggleUserCodeFocus",
+        "title": "Toggle USER CODE Focus",
+        "category": "Dauhuniec",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "dauhuniec.goToUserCode",
+        "title": "Go to USER CODE Block",
+        "category": "Dauhuniec",
+        "icon": "$(symbol-method)"
+      },
+      {
+        "command": "dauhuniec.moreActions",
+        "title": "More Project Actions",
+        "category": "Dauhuniec",
+        "icon": "$(ellipsis)"
+      },
+      {
+        "command": "dauhuniec.stopTask",
+        "title": "Stop Active Task",
+        "category": "Dauhuniec",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "dauhuniec.upload",
+        "title": "Flash Firmware (Without Building)",
+        "category": "Dauhuniec",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "dauhuniec.serialMonitor",
+        "title": "Open Serial Monitor",
+        "category": "Dauhuniec",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "dauhuniec.serialStartLogging",
+        "title": "Serial Monitor: Start Logging",
+        "category": "Dauhuniec"
+      },
+      {
+        "command": "dauhuniec.serialStopLogging",
+        "title": "Serial Monitor: Stop Logging",
+        "category": "Dauhuniec"
+      },
+      {
+        "command": "dauhuniec.selectTarget",
+        "title": "Select Target Board",
+        "category": "Dauhuniec",
+        "icon": "$(circuit-board)"
+      },
+      {
+        "command": "dauhuniec.documentation",
+        "title": "Open Documentation (MCU / Board / HAL / RTOS)",
+        "category": "Dauhuniec",
+        "icon": "$(library)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dauhuniec",
+          "title": "Dauhuniec",
+          "icon": "media/dauhuniec.svg"
+        }
+      ]
+    },
+    "views": {
+      "dauhuniec": [
+        {
+          "id": "dauhuniec.projects",
+          "name": "Key Actions"
+        },
+        {
+          "id": "dauhuniec.projectSettings",
+          "name": "Project",
+          "when": "dauhuniec.hasProject"
+        },
+        {
+          "id": "dauhuniec.diagnostics",
+          "name": "Diagnostics",
+          "when": "dauhuniec.hasProject",
+          "visibility": "collapsed"
+        },
+        {
+          "id": "dauhuniec.resources",
+          "name": "Resources"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "dauhuniec.projects",
+        "contents": "Open a project generated by STM32CubeMX, or create one in CubeMX.\n[Open STM32CubeMX / Create Project](command:dauhuniec.openIOC)\n[Select Project](command:dauhuniec.selectProject)",
+        "when": "!dauhuniec.hasProject"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "dauhuniec.refresh",
+          "when": "view == dauhuniec.projectSettings",
+          "group": "navigation@1"
+        },
+        {
+          "command": "dauhuniec.selectProject",
+          "when": "view == dauhuniec.projectSettings",
+          "group": "navigation@2"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "dauhuniec.openIOC",
+          "when": "resourceExtname == .ioc",
+          "group": "navigation@1"
+        },
+        {
+          "command": "dauhuniec.configure",
+          "when": "resourceExtname == .ioc",
+          "group": "navigation"
+        },
+        {
+          "command": "dauhuniec.focusUserCode",
+          "when": "dauhuniec.hasUserCode && !dauhuniec.userCodeFocus",
+          "group": "navigation@20"
+        },
+        {
+          "command": "dauhuniec.showFullFile",
+          "when": "dauhuniec.hasUserCode && dauhuniec.userCodeFocus",
+          "group": "navigation@20"
+        },
+        {
+          "command": "dauhuniec.goToUserCode",
+          "when": "dauhuniec.hasUserCode",
+          "group": "navigation@21"
+        },
+        {
+          "command": "dauhuniec.documentation",
+          "when": "resourceExtname == .ioc",
+          "group": "navigation@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "dauhuniec.openIOC",
+          "when": "resourceExtname == .ioc && resourceScheme == file",
+          "group": "navigation"
+        },
+        {
+          "command": "dauhuniec.documentation",
+          "when": "resourceExtname == .ioc && resourceScheme == file",
+          "group": "navigation"
+        }
+      ]
+    },
+    "taskDefinitions": [
+      {
+        "type": "dauhuniec",
+        "required": [
+          "action",
+          "project"
+        ],
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          }
+        }
+      }
+    ],
+    "configuration": {
+      "title": "Dauhuniec",
+      "properties": {
+        "dauhuniec.autoDetect": {
+          "type": "boolean",
+          "default": true,
+          "description": "Offer to configure CubeMX projects when they are opened."
+        },
+        "dauhuniec.cubeIDEPath": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Optional CubeIDE installation or plugins directory. Empty means automatic detection."
+        },
+        "dauhuniec.makePath": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "description": "Optional GNU Make executable. Windows requires MSYS2 Make and shell."
+        },
+        "dauhuniec.runner": {
+          "type": "string",
+          "scope": "resource",
+          "description": "Project-local CLI, managed by Dauhuniec setup."
+        },
+        "dauhuniec.gcc": {
+          "type": "string",
+          "scope": "resource",
+          "description": "ARM GCC executable, managed by setup."
+        },
+        "dauhuniec.gdb": {
+          "type": "string",
+          "scope": "resource",
+          "description": "ARM GDB executable, managed by setup."
+        },
+        "dauhuniec.objcopy": {
+          "type": "string",
+          "scope": "resource",
+          "description": "ARM objcopy executable, managed by setup."
+        },
+        "dauhuniec.objdump": {
+          "type": "string",
+          "scope": "resource",
+          "description": "ARM objdump executable, managed by setup."
+        },
+        "dauhuniec.nm": {
+          "type": "string",
+          "scope": "resource",
+          "description": "ARM nm executable, managed by setup."
+        },
+        "dauhuniec.size": {
+          "type": "string",
+          "scope": "resource",
+          "description": "ARM size executable, managed by setup."
+        },
+        "dauhuniec.make": {
+          "type": "string",
+          "scope": "resource",
+          "description": "Detected GNU Make executable, managed by setup."
+        },
+        "dauhuniec.shell": {
+          "type": "string",
+          "scope": "resource",
+          "description": "Detected MSYS2 shell, managed by setup."
+        },
+        "dauhuniec.server": {
+          "type": "string",
+          "scope": "resource",
+          "description": "ST-LINK GDB server executable, managed by setup."
+        },
+        "dauhuniec.programmer": {
+          "type": "string",
+          "scope": "resource",
+          "description": "STM32CubeProgrammer executable, managed by setup."
+        },
+        "dauhuniec.programmerDir": {
+          "type": "string",
+          "scope": "resource",
+          "description": "STM32CubeProgrammer directory, managed by setup."
+        },
+        "dauhuniec.elf": {
+          "type": "string",
+          "scope": "resource",
+          "description": "Firmware ELF file, managed by setup."
+        },
+        "dauhuniec.device": {
+          "type": "string",
+          "scope": "resource",
+          "description": "STM32 device from CubeMX, managed by setup."
+        },
+        "dauhuniec.focusUserCodeOnOpen": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "description": "Automatically fold generated sections when opening C/C++ files with CubeMX USER CODE markers. Explicit per-file choices take precedence."
+        },
+        "dauhuniec.cubeMXPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "description": "Optional STM32CubeMX executable, macOS .app bundle or installation directory. Empty means detection in standard installation directories and PATH. Tools run on the workspace host (including SSH/WSL/containers)."
+        },
+        "dauhuniec.documentationPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "resource",
+          "description": "Additional local documentation folders (for example an STM32Cube firmware package). Absolute paths or paths relative to the selected project. PDF, Markdown and HTML files are indexed when opening Documentation; up to 200 files per folder."
+        }
+      }
+    }
+  }
+}

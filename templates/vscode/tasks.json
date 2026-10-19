@@ -1,0 +1,73 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Dauhuniec: Build",
+      "type": "process",
+      "command": "${config:dauhuniec.runner}",
+      "args": [
+        "build"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [
+        "$gcc"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Dauhuniec: Clean",
+      "type": "process",
+      "command": "${config:dauhuniec.runner}",
+      "args": [
+        "clean"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Dauhuniec: Build + Flash + Run",
+      "type": "process",
+      "command": "${config:dauhuniec.runner}",
+      "args": [
+        "flash"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [
+        "$gcc"
+      ]
+    },
+    {
+      "label": "Dauhuniec: Check tools",
+      "type": "process",
+      "command": "${config:dauhuniec.runner}",
+      "args": [
+        "doctor"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Dauhuniec: List ST-LINK probes",
+      "type": "process",
+      "command": "${config:dauhuniec.runner}",
+      "args": [
+        "list-probes"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

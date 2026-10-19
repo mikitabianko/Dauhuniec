@@ -1,0 +1,58 @@
+# Native builds and release packages
+/build/
+/bin/
+/lon
+/lon.exe
+/SHA256SUMS
+*.test
+/*.exe
+/releases/
+*.vsix
+
+# JavaScript dependencies and package-manager caches
+node_modules/
+.pnpm-store/
+.pnpm-state/
+.npm/
+
+# Extension compilation and staged package resources
+/extension/dist/
+/extension/bin/
+/extension/LICENSE
+/extension/GO-LICENSE.txt
+/extension/THIRD-PARTY-NOTICES.txt
+
+# Local output, coverage and caches
+/output/
+coverage/
+.nyc_output/
+.cache/
+.vscode-test/
+coverage.out
+coverage.html
+*.tsbuildinfo
+*.log
+__pycache__/
+
+# Serial console recordings (default/example filenames)
+serial*.jsonl
+
+# Local settings and credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+/.dauhuniec/
+/.lon/
+/.stm32-codeready/
+.vscode/
+.idea/
+
+# Operating system and editor files
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+*~
+*.swp
+*.swo
