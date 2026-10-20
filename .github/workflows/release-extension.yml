@@ -16,13 +16,37 @@ jobs:
     name: Validate release commit
     uses: ./.github/workflows/build-extension.yml
 
+  plan:
+    name: Check release version
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      publish: ${{ steps.plan.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Check version tag before building
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/ci/plan-release.cjs
+
   build:
     name: Package VSIX
-    needs: validation
+    needs: plan
+    if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
-      version: ${{ steps.version.outputs.version }}
+      version: ${{ needs.plan.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -31,39 +55,12 @@ jobs:
 
       - uses: ./.github/actions/setup-extension
 
-      - uses: actions/setup-go@v7
-        id: go
+      - uses: ./.github/actions/setup-go
         with:
-          go-version: stable
-          cache: false
-
-      - name: Locate Go caches
-        id: go-cache
-        run: |
-          echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
-          echo "modules=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
-          echo "image=$ImageOS" >> "$GITHUB_OUTPUT"
-
-      # Keep cross-compilation outputs separate from the native test cache.
-      # A new commit saves an updated cache; earlier builds seed incremental work.
-      - name: Cache release Go modules and build outputs
-        uses: actions/cache@v6
-        with:
-          path: |
-            ${{ steps.go-cache.outputs.build }}
-            ${{ steps.go-cache.outputs.modules }}
-          key: release-go-${{ runner.os }}-${{ runner.arch }}-${{ steps.go-cache.outputs.image }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}
-          restore-keys: |
-            release-go-${{ runner.os }}-${{ runner.arch }}-${{ steps.go-cache.outputs.image }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-
+          scope: release
 
       - name: Build CLI for Windows, macOS and Linux (x64 and ARM64)
         run: go run ./cmd/package -jobs 2
-
-      - name: Read package version
-        id: version
-        run: |
-          version=$(node -p "require('./extension/package.json').version")
-          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Package extension
         working-directory: extension
@@ -79,7 +76,7 @@ jobs:
       - name: Upload downloadable installer
         uses: actions/upload-artifact@v7
         with:
-          name: dauhuniec-${{ steps.version.outputs.version }}-vsix
+          name: dauhuniec-${{ needs.plan.outputs.version }}-vsix
           path: releases/
           if-no-files-found: error
           retention-days: 30
@@ -87,7 +84,7 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    needs: build
+    needs: [validation, build]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -149,4 +146,4 @@ jobs:
         working-directory: extension
         env:
           EXTENSION_VERSION: ${{ needs.build.outputs.version }}
-        run: pnpm exec vsce publish --azure-credential --packagePath "../releases/dauhuniec-${EXTENSION_VERSION}.vsix"
+        run: pnpm exec vsce publish --azure-credential --skip-duplicate --packagePath "../releases/dauhuniec-${EXTENSION_VERSION}.vsix"

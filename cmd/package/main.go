@@ -38,36 +38,49 @@ func release(jobs int) error {
 		{"linux", "amd64"}, {"linux", "arm64"},
 		{"windows", "amd64"}, {"windows", "arm64"},
 	}
-	// Cap concurrency, wait for each batch, and retain the manifest's target order.
-	if jobs > len(targets) {
-		jobs = len(targets)
+	lines, err := buildTargets(targets, jobs, buildTarget)
+	if err != nil {
+		return err
 	}
-	var checksums strings.Builder
-	for start := 0; start < len(targets); start += jobs {
-		end := min(start+jobs, len(targets))
-		lines := make([]string, end-start)
-		errs := make([]error, end-start)
-		var builds sync.WaitGroup
-		for i := start; i < end; i++ {
-			builds.Add(1)
-			go func(i int) {
-				defer builds.Done()
-				lines[i-start], errs[i-start] = buildTarget(targets[i])
-			}(i)
-		}
-		builds.Wait()
-		for i, err := range errs {
-			if err != nil {
-				return err
-			}
-			checksums.WriteString(lines[i])
-		}
-	}
-	if err := os.WriteFile("SHA256SUMS", []byte(checksums.String()), 0644); err != nil {
+	if err := os.WriteFile("SHA256SUMS", []byte(strings.Join(lines, "")), 0644); err != nil {
 		return err
 	}
 	fmt.Println("Ready: bin/ and SHA256SUMS")
 	return nil
+}
+
+// Keep workers busy as targets finish, but retain the manifest's target order.
+func buildTargets(targets []target, jobs int, build func(target) (string, error)) ([]string, error) {
+	if jobs < 1 {
+		return nil, fmt.Errorf("jobs must be at least 1")
+	}
+	if jobs > len(targets) {
+		jobs = len(targets)
+	}
+	lines := make([]string, len(targets))
+	errs := make([]error, len(targets))
+	queue := make(chan int)
+	var workers sync.WaitGroup
+	for worker := 0; worker < jobs; worker++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for i := range queue {
+				lines[i], errs[i] = build(targets[i])
+			}
+		}()
+	}
+	for i := range targets {
+		queue <- i
+	}
+	close(queue)
+	workers.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return nil, err
+		}
+	}
+	return lines, nil
 }
 
 func buildTarget(target target) (string, error) {
