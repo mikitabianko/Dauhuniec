@@ -124,3 +124,43 @@ jobs:
           RELEASE_TAG: v${{ needs.build.outputs.version }}
           RELEASE_COMMIT: ${{ github.event.pull_request.merge_commit_sha }}
         run: bash scripts/ci/publish-release.sh
+
+  marketplace:
+    name: Publish to VS Code Marketplace
+    needs: [build, release]
+    if: vars.MARKETPLACE_PUBLISH_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: marketplace
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-extension
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: dauhuniec-${{ needs.build.outputs.version }}-vsix
+          path: releases
+
+      - name: Verify installer checksum
+        working-directory: releases
+        run: sha256sum --check SHA256SUMS
+
+      - name: Sign in to Azure
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Publish verified VSIX
+        working-directory: extension
+        env:
+          EXTENSION_VERSION: ${{ needs.build.outputs.version }}
+        run: pnpm exec vsce publish --azure-credential --packagePath "../releases/dauhuniec-${EXTENSION_VERSION}.vsix"
