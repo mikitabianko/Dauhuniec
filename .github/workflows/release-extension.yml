@@ -61,18 +61,6 @@ jobs:
       - name: Build CLI for Windows, macOS and Linux (x64 and ARM64)
         run: go run ./cmd/package -jobs 2
 
-      # A tar archive preserves executable permissions in the download.
-      - name: Archive CLI binaries and checksums
-        run: tar -cf cli-bundle.tar bin SHA256SUMS
-
-      - name: Upload CLI bundle
-        uses: actions/upload-artifact@v7
-        with:
-          name: native-cli
-          path: cli-bundle.tar
-          if-no-files-found: error
-          retention-days: 30
-
       - name: Read package version
         id: version
         run: |

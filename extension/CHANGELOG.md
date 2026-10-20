@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1
+
+- Publish verified release packages to Visual Studio Marketplace through GitHub Actions using Microsoft Entra OIDC.
+- Remove the temporary Marketplace identity inspection workflow and redundant CLI build artifact.
+
 ## 0.1.0
 
 Initial release of Dauhuniec, with the `lon` CLI.
