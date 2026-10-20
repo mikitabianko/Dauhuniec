@@ -59,28 +59,26 @@ them to source control. Review the staged file list for local paths and credenti
 
 ## GitHub Actions and releases
 
-The **Build extension** workflow runs on branch pushes, pull requests, version
-tags and manual dispatch. It runs Go tests and vet, cross-compiles all six native
-executables, installs the locked pnpm dependencies, tests the extension and
-packages a universal VSIX. The package filename follows `extension/package.json`.
-The VSIX and its SHA-256 checksum are available in the run's **Artifacts** section
-for 30 days (GitHub sign-in required).
+The **Build extension** workflow runs only after a pull request is merged into
+`master`. Closing a pull request without merging, opening or updating a pull
+request, direct pushes and version tags do not build the extension. The checkout
+uses the pull request's exact merge commit, including squash and rebase merges.
 
-To publish a downloadable GitHub Release:
+The workflow runs Go tests and vet, cross-compiles all six native executables,
+installs the locked pnpm dependencies, tests the extension and packages a universal
+VSIX. The package filename follows `extension/package.json`. The VSIX and its
+SHA-256 checksum are available in the run's **Artifacts** section for 30 days
+(GitHub sign-in required).
 
-1. Set the version in `extension/package.json` and update `extension/CHANGELOG.md`.
-2. Commit and push the changes, including `.github/workflows/build-extension.yml`.
-3. Push a matching version tag. For the current `0.1.0` version:
+After the checks pass, the workflow creates a GitHub Release tagged `v<version>`
+at the merge commit, with generated notes, `dauhuniec-<version>.vsix` and
+`SHA256SUMS`. No manual tag push is needed. Set the version in
+`extension/package.json` and update `extension/CHANGELOG.md` before merging a new
+release. If the version already has a release, its downloadable assets are
+replaced; the existing tag stays at its original commit. Bump the version for a
+new release with its own tag.
 
-   ```sh
-   git tag v0.1.0
-   git push origin v0.1.0
-   ```
-
-The tag must equal `v` plus the package version; mismatches fail before packaging.
-After the checks pass, the workflow creates a release with generated notes and
-attaches `dauhuniec-<version>.vsix` and `SHA256SUMS`. Rerunning a tag build updates
-the assets of an existing release. Users download the installer from
+Users download the installer from
 [Releases](https://github.com/mikitabianko/Dauhuniec/releases/latest) and select
 **Extensions → … → Install from VSIX…** in VS Code.
 

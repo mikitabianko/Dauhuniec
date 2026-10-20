@@ -54,7 +54,8 @@ Download the `.vsix` installer from the latest
 use **Extensions → … → Install from VSIX…** in VS Code. One installer includes
 the CLI for Windows, macOS and Linux on x64 and ARM64.
 
-For development builds, open [Build extension in GitHub Actions](https://github.com/mikitabianko/Dauhuniec/actions/workflows/build-extension.yml),
+Builds run automatically after pull requests are merged into `master`.
+To download a build artifact, open [Build extension in GitHub Actions](https://github.com/mikitabianko/Dauhuniec/actions/workflows/build-extension.yml),
 select a successful run and download `dauhuniec-<version>-vsix` under **Artifacts**.
 Sign in to GitHub to download the artifact, then unzip it to get the `.vsix` and
 its `SHA256SUMS` file. Build artifacts are retained for 30 days; tagged releases
