@@ -64,11 +64,13 @@ opened, updated, reopened or marked ready for review. These checks use GitHub's
 PR merge ref to test the proposed changes together with the target branch.
 New commits cancel outdated checks for the same PR; different PRs run independently.
 
-The separate **Release extension** workflow runs on PR closure and only proceeds
-after the pull request is merged into `master`. It reuses the CI workflow to
-validate the exact merge commit before building and publishing, including squash
-and rebase merges. Closing a PR without merging, direct pushes and version tags
-do not build a release. Release jobs do not appear in open PR validation runs.
+The separate **Release extension** workflow runs on pushes to `master`, including
+PR merges and direct pushes. It reuses the CI workflow to validate the exact
+pushed commit before building and publishing, including squash and rebase merges.
+Every checkout is pinned to the event SHA. Closing an unmerged PR and pushing
+version tags do not build a release. Release jobs do not appear in open PR checks.
+The push trigger gives deployment jobs the `refs/heads/master` ref required by
+the `marketplace` environment; a PR ref can be rejected by that environment.
 
 The CI workflow contains only validation jobs:
 
@@ -79,9 +81,9 @@ The CI workflow contains only validation jobs:
 
 The release workflow contains:
 
-- `validation` calls the same CI workflow on the merge commit.
+- `validation` calls the same CI workflow on the pushed commit.
 - `build` cross-compiles all six release executables and packages the universal
-  VSIX only after both test jobs succeed and the PR is merged.
+  VSIX only after both test jobs succeed on the pushed commit.
 - `release` publishes the installer after packaging succeeds.
 - `marketplace` publishes the same verified VSIX to Visual Studio Marketplace
   after the GitHub Release succeeds, when the repository Actions variable
@@ -123,7 +125,7 @@ SHA-256 checksum are available in the run's **Artifacts** section for 30 days
 (GitHub sign-in required).
 
 After the checks pass, the workflow creates a GitHub Release tagged `v<version>`
-at the merge commit, with generated notes, `dauhuniec-<version>.vsix` and
+at the pushed commit, with generated notes, `dauhuniec-<version>.vsix` and
 `SHA256SUMS`. No manual tag push is needed. Set the version in
 `extension/package.json` and update `extension/CHANGELOG.md` before merging a new
 release. If the version already has a release, its downloadable assets are
@@ -164,7 +166,7 @@ without a PAT or client secret. Configure it once:
    It must be a repository or organization variable, not an environment variable,
    because the job condition is evaluated before the environment is entered.
 
-Subsequent merged PRs publish automatically after validation, packaging and the
+Subsequent pushes to `master` publish automatically after validation, packaging and the
 GitHub Release. Increase `extension/package.json`'s version and update the
 changelog before each Marketplace release: Marketplace cannot overwrite an
 existing version. A rerun after a successful Marketplace publication will also

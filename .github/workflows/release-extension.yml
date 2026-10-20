@@ -1,9 +1,8 @@
 name: Release extension
 
 on:
-  pull_request:
+  push:
     branches: [master]
-    types: [closed]
 
 permissions:
   contents: read
@@ -14,8 +13,7 @@ concurrency:
 
 jobs:
   validation:
-    name: Validate merge commit
-    if: github.event.pull_request.merged == true
+    name: Validate release commit
     uses: ./.github/workflows/build-extension.yml
 
   build:
@@ -28,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - uses: ./.github/actions/setup-extension
@@ -54,7 +52,7 @@ jobs:
           path: |
             ${{ steps.go-cache.outputs.build }}
             ${{ steps.go-cache.outputs.modules }}
-          key: release-go-${{ runner.os }}-${{ runner.arch }}-${{ steps.go-cache.outputs.image }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.event.pull_request.merge_commit_sha }}
+          key: release-go-${{ runner.os }}-${{ runner.arch }}-${{ steps.go-cache.outputs.image }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}
           restore-keys: |
             release-go-${{ runner.os }}-${{ runner.arch }}-${{ steps.go-cache.outputs.image }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-
 
@@ -97,7 +95,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - uses: actions/download-artifact@v8
@@ -110,7 +108,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: v${{ needs.build.outputs.version }}
-          RELEASE_COMMIT: ${{ github.event.pull_request.merge_commit_sha }}
+          RELEASE_COMMIT: ${{ github.sha }}
         run: bash scripts/ci/publish-release.sh
 
   marketplace:
@@ -126,7 +124,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - uses: ./.github/actions/setup-extension
