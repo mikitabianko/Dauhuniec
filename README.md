@@ -54,7 +54,8 @@ Download the `.vsix` installer from the latest
 use **Extensions → … → Install from VSIX…** in VS Code. One installer includes
 the CLI for Windows, macOS and Linux on x64 and ARM64.
 
-Builds run automatically after pull requests are merged into `master`.
+Pull requests targeting `master` show CLI and extension test results under **Checks**.
+Installer builds and releases run automatically after those pull requests are merged.
 To download a build artifact, open [Build extension in GitHub Actions](https://github.com/mikitabianko/Dauhuniec/actions/workflows/build-extension.yml),
 select a successful run and download `dauhuniec-<version>-vsix` under **Artifacts**.
 Sign in to GitHub to download the artifact, then unzip it to get the `.vsix` and

@@ -3,21 +3,113 @@ name: Build extension
 on:
   pull_request:
     branches: [master]
-    types: [closed]
+    types: [opened, synchronize, reopened, ready_for_review, closed]
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-master
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.event.action == 'closed' && 'master' || github.ref }}
+  cancel-in-progress: ${{ github.event.action != 'closed' }}
 
 jobs:
-  build:
-    if: github.event.pull_request.merged == true
-    name: Test and package VSIX
+  cli:
+    if: github.event.action != 'closed' || github.event.pull_request.merged == true
+    name: Test and build CLI
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.action == 'closed' && github.event.pull_request.merge_commit_sha || github.ref }}
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache-dependency-path: go.sum
+
+      - name: Test Go CLI
+        run: go test ./...
+
+      - name: Check Go code
+        run: go vet ./...
+
+      - name: Build CLI for Windows, macOS and Linux (x64 and ARM64)
+        run: go run ./cmd/package
+
+      # A tar archive preserves executable permissions between jobs.
+      - name: Archive CLI binaries and checksums
+        run: tar -cf cli-bundle.tar bin SHA256SUMS
+
+      - name: Upload CLI bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-cli
+          path: cli-bundle.tar
+          if-no-files-found: error
+          retention-days: 30
+
+  tests:
+    name: Test extension
+    needs: cli
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.action == 'closed' && github.event.pull_request.merge_commit_sha || github.ref }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: extension/package.json
+          cache: true
+          cache_dependency_path: extension/pnpm-lock.yaml
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: native-cli
+
+      - name: Restore and verify CLI binaries
+        run: |
+          tar -xf cli-bundle.tar
+          sha256sum --check SHA256SUMS
+
+      - name: Install extension dependencies
+        working-directory: extension
+        run: pnpm install --frozen-lockfile
+
+      - name: Test extension
+        working-directory: extension
+        run: pnpm test
+
+  checks:
+    name: PR checks
+    if: always() && github.event.action != 'closed'
+    needs: [cli, tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require successful CLI and extension checks
+        env:
+          CLI_RESULT: ${{ needs.cli.result }}
+          TESTS_RESULT: ${{ needs.tests.result }}
+        run: |
+          echo "CLI: $CLI_RESULT"
+          echo "Extension tests: $TESTS_RESULT"
+          [[ "$CLI_RESULT" == success && "$TESTS_RESULT" == success ]]
+
+  build:
+    name: Package VSIX
+    if: github.event.action == 'closed' && github.event.pull_request.merged == true
+    needs: [cli, tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -36,10 +128,14 @@ jobs:
           cache: true
           cache_dependency_path: extension/pnpm-lock.yaml
 
-      - uses: actions/setup-go@v7
+      - uses: actions/download-artifact@v8
         with:
-          go-version: stable
-          cache-dependency-path: go.sum
+          name: native-cli
+
+      - name: Restore and verify CLI binaries
+        run: |
+          tar -xf cli-bundle.tar
+          sha256sum --check SHA256SUMS
 
       - name: Read package version
         id: version
@@ -47,22 +143,9 @@ jobs:
           version=$(node -p "require('./extension/package.json').version")
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Test Go CLI
-        run: go test ./...
-
-      - name: Check Go code
-        run: go vet ./...
-
-      - name: Build CLI for Windows, macOS and Linux (x64 and ARM64)
-        run: go run ./cmd/package
-
       - name: Install extension dependencies
         working-directory: extension
         run: pnpm install --frozen-lockfile
-
-      - name: Test extension
-        working-directory: extension
-        run: pnpm test
 
       - name: Package extension
         working-directory: extension

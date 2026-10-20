@@ -59,14 +59,32 @@ them to source control. Review the staged file list for local paths and credenti
 
 ## GitHub Actions and releases
 
-The **Build extension** workflow runs only after a pull request is merged into
-`master`. Closing a pull request without merging, opening or updating a pull
-request, direct pushes and version tags do not build the extension. The checkout
-uses the pull request's exact merge commit, including squash and rebase merges.
+The **Build extension** workflow checks pull requests targeting `master` when
+opened, updated, reopened or marked ready for review. These checks use GitHub's
+PR merge ref to test the proposed changes together with the target branch.
+New commits cancel outdated checks for the same PR; different PRs run independently.
 
-The workflow runs Go tests and vet, cross-compiles all six native executables,
-installs the locked pnpm dependencies, tests the extension and packages a universal
-VSIX. The package filename follows `extension/package.json`. The VSIX and its
+Packaging and publishing run only after the pull request is merged into `master`,
+using its exact merge commit, including squash and rebase merges. Closing a PR
+without merging, direct pushes and version tags do not build a release.
+
+The workflow separates CLI validation, extension tests, packaging and publishing:
+
+- `cli` runs Go tests and vet, then cross-compiles all six native executables.
+- `tests` downloads the CLI binaries and runs the extension tests with locked pnpm dependencies.
+- `checks` reports **PR checks**, succeeding only when CLI and extension checks both pass; failures or skipped dependencies make it fail.
+- `build` packages the universal VSIX only after both jobs succeed, reusing the CLI binaries.
+- `release` publishes the installer after packaging succeeds.
+
+To block merging when checks fail, configure a branch protection rule or ruleset
+for `master` in GitHub Settings and require the **PR checks** status check. Run
+the workflow on a PR once so GitHub can offer that check for selection. Do not
+require `build` or `release`, which intentionally skip PR validation runs.
+
+CLI binaries and their checksums pass between jobs in a tar archive to preserve
+executable permissions. Each consuming job verifies the checksums before use.
+The `native-cli` artifact contains this archive and is also available for download.
+The package filename follows `extension/package.json`. The VSIX and its
 SHA-256 checksum are available in the run's **Artifacts** section for 30 days
 (GitHub sign-in required).
 
