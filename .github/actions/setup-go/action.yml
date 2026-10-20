@@ -3,7 +3,7 @@ description: Install Go and restore shared modules and job-specific compiler cac
 
 inputs:
   scope:
-    description: Compiler cache scope (cli, extension-tests or release).
+    description: Compiler cache scope (cli, extension-tests or package).
     required: true
 
 runs:

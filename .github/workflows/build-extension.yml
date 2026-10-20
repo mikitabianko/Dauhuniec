@@ -18,7 +18,7 @@ jobs:
     name: Test CLI (${{ matrix.os }})
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
@@ -44,8 +44,11 @@ jobs:
         run: go vet ./...
 
   tests:
-    name: Test extension
-    runs-on: ubuntu-latest
+    name: Test extension (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -56,6 +59,7 @@ jobs:
       - uses: ./.github/actions/setup-extension
 
       - name: Test CI release scripts
+        if: runner.os == 'Linux'
         run: |
           node --test scripts/ci/plan-release.test.cjs
           python3 -m unittest discover -s scripts/ci -p 'test_*.py'
@@ -67,34 +71,30 @@ jobs:
       # The integration test executes the CLI on this runner; release targets
       # are built separately by the release workflow.
       - name: Build runner-native CLI for extension tests
-        run: go build -o bin/lon-linux-amd64 ./cmd/lon
+        shell: bash
+        run: go build -o "bin/lon-$(go env GOOS)-$(go env GOARCH)$(go env GOEXE)" ./cmd/lon
 
       - name: Test extension
         working-directory: extension
         run: pnpm test
 
-  windows-cubemx:
-    name: Test CubeMX launch on Windows
-    runs-on: windows-latest
-    timeout-minutes: 10
+  package:
+    name: Verify PR installer
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-extension
-
-      - name: Test Windows executable launch and paths
-        working-directory: extension
-        run: |
-          pnpm run compile
-          node --test dist/test/cubeMX.test.js
+      - uses: ./.github/actions/package-extension
 
   checks:
     name: PR checks
     if: always()
-    needs: [cli, tests, windows-cubemx]
+    needs: [cli, tests, package]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -102,9 +102,17 @@ jobs:
         env:
           CLI_RESULT: ${{ needs.cli.result }}
           TESTS_RESULT: ${{ needs.tests.result }}
-          WINDOWS_RESULT: ${{ needs.windows-cubemx.result }}
+          PACKAGE_RESULT: ${{ needs.package.result }}
+          PACKAGE_REQUIRED: ${{ github.event_name == 'pull_request' }}
         run: |
           echo "CLI: $CLI_RESULT"
           echo "Extension tests: $TESTS_RESULT"
-          echo "Windows CubeMX tests: $WINDOWS_RESULT"
-          [[ "$CLI_RESULT" == success && "$TESTS_RESULT" == success && "$WINDOWS_RESULT" == success ]]
+          echo "Packaging: $PACKAGE_RESULT"
+          if [[ "$CLI_RESULT" != success || "$TESTS_RESULT" != success ]]; then
+            exit 1
+          fi
+          if [[ "$PACKAGE_REQUIRED" == true ]]; then
+            [[ "$PACKAGE_RESULT" == success ]]
+          else
+            [[ "$PACKAGE_RESULT" == skipped ]]
+          fi

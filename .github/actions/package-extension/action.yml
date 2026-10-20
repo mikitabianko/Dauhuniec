@@ -1,0 +1,29 @@
+name: Package extension
+description: Build all CLI targets and verify the universal VSIX.
+
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/setup-extension
+
+    - uses: ./.github/actions/setup-go
+      with:
+        scope: package
+
+    - name: Build CLI for Windows, macOS and Linux (x64 and ARM64)
+      shell: bash
+      run: go run ./cmd/package -jobs 2
+
+    - name: Package extension
+      shell: bash
+      working-directory: extension
+      run: pnpm run package
+
+    - name: Verify bundled resources
+      shell: bash
+      run: python3 scripts/ci/verify-vsix.py
+
+    - name: Compute installer checksum
+      shell: bash
+      working-directory: releases
+      run: sha256sum *.vsix > SHA256SUMS

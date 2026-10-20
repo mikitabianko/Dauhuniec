@@ -10,6 +10,7 @@ permissions:
 concurrency:
   group: ${{ github.workflow }}-master
   cancel-in-progress: false
+  queue: max
 
 jobs:
   validation:
@@ -53,31 +54,14 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-extension
-
-      - uses: ./.github/actions/setup-go
-        with:
-          scope: release
-
-      - name: Build CLI for Windows, macOS and Linux (x64 and ARM64)
-        run: go run ./cmd/package -jobs 2
-
-      - name: Package extension
-        working-directory: extension
-        run: pnpm run package
-
-      - name: Verify bundled resources
-        run: python3 scripts/ci/verify-vsix.py
-
-      - name: Compute installer checksum
-        working-directory: releases
-        run: sha256sum *.vsix > SHA256SUMS
+      - uses: ./.github/actions/package-extension
 
       - name: Upload downloadable installer
         uses: actions/upload-artifact@v7
         with:
           name: dauhuniec-${{ needs.plan.outputs.version }}-vsix
           path: releases/
+          overwrite: true
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
@@ -108,6 +92,17 @@ jobs:
           RELEASE_COMMIT: ${{ github.sha }}
         run: bash scripts/ci/publish-release.sh
 
+      # The publication script restores the original assets on a retry.
+      - name: Upload published installer for Marketplace
+        uses: actions/upload-artifact@v7
+        with:
+          name: dauhuniec-${{ needs.build.outputs.version }}-published
+          path: releases/
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
   marketplace:
     name: Publish to VS Code Marketplace
     needs: [build, release]
@@ -128,7 +123,7 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
-          name: dauhuniec-${{ needs.build.outputs.version }}-vsix
+          name: dauhuniec-${{ needs.build.outputs.version }}-published
           path: releases
 
       - name: Verify installer checksum

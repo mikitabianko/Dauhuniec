@@ -49,7 +49,8 @@ to also remove `extension/node_modules/`.
 
 ## Pull requests and releases
 
-Pull requests into `master` run Go and extension checks. Pushes to `master`
+Pull requests into `master` run Go and extension checks on Linux, Windows and
+macOS, and verify a complete VSIX with all six CLI targets. Pushes to `master`
 validate the pushed commit and build eligible releases in parallel; publication
 waits for both to pass.
 

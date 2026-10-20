@@ -112,7 +112,10 @@ test('immediate native launcher failures are reported with their exit code', asy
       await fs.writeFile(app, '#!/bin/sh\nexit 23\n', { mode: 0o755 });
     }
     await assert.rejects(launchCubeMX(app, ioc), /Could not start STM32CubeMX.*exit code 23/);
-  } finally { await fs.rm(root, { recursive: true, force: true }); }
+  } finally {
+    // Windows can briefly retain the executable lock after the child exits.
+    await fs.rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
 });
 
 test('Windows native launch preserves Unicode, spaces and shell metacharacters in IOC paths', { skip: process.platform !== 'win32' }, async () => {
@@ -130,7 +133,10 @@ test('Windows native launch preserves Unicode, spaces and shell metacharacters i
       await new Promise(resolve => setTimeout(resolve, 20));
     }
     assert.deepEqual(JSON.parse(await fs.readFile(result, 'utf8')), { argv: [ioc], flags: ['-i'] });
-  } finally { await fs.rm(root, { recursive: true, force: true }); }
+  } finally {
+    // Windows can briefly retain the executable lock after the child exits.
+    await fs.rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
 });
 
 test('native launch delivers exact project arguments to an executable', { skip: process.platform === 'win32' }, async () => {
