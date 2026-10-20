@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Simplify Make discovery and extract build environment preparation and legacy settings migration without changing behavior.
+
 ## 0.1.1
 
 - Use native GNU Make from CubeIDE on Windows without MSYS2; create build directories and clean them in the CLI, and include Windows setup instructions in Resources and the Command Palette.

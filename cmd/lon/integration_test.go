@@ -254,18 +254,28 @@ func TestWindowsDiscoversCubeIDEMakeWithoutShell(t *testing.T) {
 		t.Skip("Windows tool discovery")
 	}
 	plugins, oldMake := fakeTools(t)
+	assertSameFile := func(got, want string) {
+		t.Helper()
+		actual, actualErr := os.Stat(got)
+		expected, expectedErr := os.Stat(want)
+		if actualErr != nil || expectedErr != nil {
+			t.Fatalf("cannot compare tool paths %q and %q: %v, %v", got, want, actualErr, expectedErr)
+		}
+		if !os.SameFile(actual, expected) {
+			t.Fatalf("tool %q does not refer to expected file %q", got, want)
+		}
+	}
 	d := discoverTools(options{ide: plugins}, map[string]string{"make": oldMake, "shell": "missing-sh.exe"})
-	if checkErrors(d.Checks) != "" || !strings.HasPrefix(d.Tools["make"], plugins) || d.Tools["shell"] != "" {
+	if checkErrors(d.Checks) != "" || d.Tools["shell"] != "" {
 		t.Fatalf("expected native CubeIDE Make without shell: %+v", d)
 	}
+	// Windows may expand the temp directory's short name (RUNNER~1) during
+	// canonicalization. Compare file identity rather than path spelling.
+	assertSameFile(d.Tools["make"], filepath.Join(plugins, "com.st.stm32cube.ide.mcu.externaltools.make.win32_2.2.0", "tools", "bin", "make.exe"))
 	migrated := discoverTools(options{ide: plugins, make: oldMake}, map[string]string{"make": oldMake, "shell": "missing-sh.exe"})
-	if migrated.Tools["make"] != d.Tools["make"] {
-		t.Fatalf("saved MSYS override was not migrated: %+v", migrated)
-	}
+	assertSameFile(migrated.Tools["make"], d.Tools["make"])
 	explicit := discoverTools(options{ide: plugins, make: oldMake}, nil)
-	if explicit.Tools["make"] != oldMake {
-		t.Fatalf("explicit Make override lost: %+v", explicit)
-	}
+	assertSameFile(explicit.Tools["make"], oldMake)
 }
 
 func TestWindowsNativeMakeBuildCleanRebuild(t *testing.T) {

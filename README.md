@@ -79,7 +79,7 @@ pnpm test
 pnpm run package
 ```
 
-Install the resulting `releases/dauhuniec-0.1.1.vsix` from the repository root.
+Install the resulting `releases/dauhuniec-0.1.2.vsix` from the repository root.
 The build also produces six native CLI executables in `bin/` and a `SHA256SUMS`
 file. These outputs are excluded from source control.
 

@@ -28,7 +28,7 @@ CLIs are supplied for Windows, macOS, and Linux on x86_64 and ARM64.
    Generate code in the project root, which should contain one `.ioc` file and a `Makefile`.
 3. Install the tools listed below.
 4. In VS Code, select **Extensions → … → Install from VSIX…** and install
-   `releases/dauhuniec-0.1.1.vsix`.
+   `releases/dauhuniec-0.1.2.vsix`.
 5. Open your project folder and select **Dauhuniec → Configure project**.
    The extension also offers configuration when it first detects a project.
 6. If tools are not found, select the CubeIDE directory or GNU Make executable.
@@ -287,7 +287,7 @@ pnpm run package
 ```
 
 Output: six CLIs in `bin/`, `SHA256SUMS`, and the installable
-`releases/dauhuniec-0.1.1.vsix`. No separate ZIP is created. Binaries,
+`releases/dauhuniec-0.1.2.vsix`. No separate ZIP is created. Binaries,
 dependencies, compiled files, and VSIX packages are excluded from Git.
 
 Extension sources are in `extension/src`; native logic is in the Go files under
