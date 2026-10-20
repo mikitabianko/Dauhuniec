@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -88,6 +90,7 @@ func fakeTools(t *testing.T) (string, string) {
 		"gnu-tools-for-stm32.14.3": {"arm-none-eabi-gcc", "arm-none-eabi-gdb", "arm-none-eabi-objcopy", "arm-none-eabi-objdump", "arm-none-eabi-size", "arm-none-eabi-nm"},
 		"stlink-gdb-server.2.2":    {"ST-LINK_gdbserver"},
 		"cubeprogrammer.2.22":      {"STM32_Programmer_CLI"},
+		"make.win32_2.2.0":         {"make"},
 	} {
 		dir := filepath.Join(plugins, "com.st.stm32cube.ide.mcu.externaltools."+family, "tools/bin")
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -101,9 +104,6 @@ func fakeTools(t *testing.T) (string, string) {
 	}
 	makePath := filepath.Join(t.TempDir(), "make"+exeSuffix())
 	if err := os.WriteFile(makePath, []byte("make fixture"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(filepath.Dir(makePath), "sh.exe"), []byte("shell fixture"), 0755); err != nil {
 		t.Fatal(err)
 	}
 	return plugins, makePath
@@ -165,7 +165,7 @@ func TestMergePreservesUserTasksSettingsAndCommentsInBackup(t *testing.T) {
 }`)
 	for name, data := range map[string][]byte{
 		"tasks.json":      originalTasks,
-		"settings.json":   []byte(`{"editor.fontSize":17,"link":"https://example.org/a//b", /* comment */}`),
+		"settings.json":   []byte(`{"editor.fontSize":17,"link":"https://example.org/a//b", "dauhuniec.shell":"old/sh.exe", "dauhuniec.make":"old/make.exe", "dauhuniec.makePath":"old/make.exe", /* comment */}`),
 		"extensions.json": []byte(`{"recommendations":["my.extension",],}`),
 	} {
 		if err := os.WriteFile(filepath.Join(root, ".vscode", name), data, 0644); err != nil {
@@ -185,6 +185,12 @@ func TestMergePreservesUserTasksSettingsAndCommentsInBackup(t *testing.T) {
 	settings, err := readObject(filepath.Join(root, ".vscode/settings.json"))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if _, exists := settings["dauhuniec.shell"]; exists {
+		t.Fatal("legacy shell setting was retained")
+	}
+	if _, exists := settings["dauhuniec.makePath"]; exists {
+		t.Fatal("legacy Make override was retained")
 	}
 	if settings["editor.fontSize"] != float64(17) || settings["link"] != "https://example.org/a//b" {
 		t.Fatalf("user settings lost: %v", settings)
@@ -240,5 +246,62 @@ func TestInvalidEditorSettingsAreLeftUntouched(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, ".vscode/tasks.json")); !os.IsNotExist(err) {
 		t.Fatal("partial configuration written")
+	}
+}
+
+func TestWindowsDiscoversCubeIDEMakeWithoutShell(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows tool discovery")
+	}
+	plugins, oldMake := fakeTools(t)
+	d := discoverTools(options{ide: plugins}, map[string]string{"make": oldMake, "shell": "missing-sh.exe"})
+	if checkErrors(d.Checks) != "" || !strings.HasPrefix(d.Tools["make"], plugins) || d.Tools["shell"] != "" {
+		t.Fatalf("expected native CubeIDE Make without shell: %+v", d)
+	}
+	migrated := discoverTools(options{ide: plugins, make: oldMake}, map[string]string{"make": oldMake, "shell": "missing-sh.exe"})
+	if migrated.Tools["make"] != d.Tools["make"] {
+		t.Fatalf("saved MSYS override was not migrated: %+v", migrated)
+	}
+	explicit := discoverTools(options{ide: plugins, make: oldMake}, nil)
+	if explicit.Tools["make"] != oldMake {
+		t.Fatalf("explicit Make override lost: %+v", explicit)
+	}
+}
+
+func TestWindowsNativeMakeBuildCleanRebuild(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("requires native Windows Make")
+	}
+	makePath, err := exec.LookPath("make.exe")
+	if err != nil {
+		t.Fatal("native make.exe required for Windows integration test")
+	}
+	root := filepath.Join(t.TempDir(), "project with spaces")
+	if err := os.MkdirAll(root, 0755); err != nil {
+		t.Fatal(err)
+	}
+	// Keep CubeMX's Unix mkdir recipe: it must never execute. The echo recipe
+	// requires cmd.exe even if a Unix shell is inherited from the user's environment.
+	contents := "TARGET = Lab\nBUILD_DIR = artifacts/build\nall: $(BUILD_DIR)/Lab.elf\n$(BUILD_DIR)/Lab.elf: | $(BUILD_DIR)\n\techo firmware> $@\n$(BUILD_DIR):\n\tmkdir -p $@\n"
+	if err := os.WriteFile(filepath.Join(root, "Makefile"), []byte(contents), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("MAKESHELL", "missing-sh.exe")
+	t.Setenv("SHELL", "missing-sh.exe")
+	cfg := config{Project: project{Target: "Lab", BuildDir: "artifacts/build"}, Tools: map[string]string{"make": makePath, "gcc": "arm-none-eabi-gcc.exe"}}
+	for i := 0; i < 2; i++ {
+		if err := build(root, cfg, run); err != nil {
+			t.Fatal(err)
+		}
+		if !regularFile(elfPath(root, cfg.Project)) {
+			t.Fatal("firmware output missing")
+		}
+		if err := perform(root, "clean", cfg, run); err != nil {
+			t.Fatal(err)
+		}
+	}
+	original, _ := os.ReadFile(filepath.Join(root, "Makefile"))
+	if string(original) != contents {
+		t.Fatal("generated Makefile was modified")
 	}
 }

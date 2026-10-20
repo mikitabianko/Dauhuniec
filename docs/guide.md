@@ -73,10 +73,10 @@ Nested user blocks are preserved in full.
   for Dauhuniec and can be installed manually.
 - GNU Make. Docker, hvy, IAR, CMake, and probe-rs are not required for this workflow.
 
-**Windows:** install [MSYS2](https://www.msys2.org/) in `C:/msys64` and run
-`pacman -S --needed make` in its terminal. The extension uses
-`C:/msys64/usr/bin/make.exe` with `sh.exe` in the same directory. ARM GCC comes
-from CubeIDE. Install ST's ST-LINK driver. Use regular VS Code/PowerShell rather than WSL.
+**Windows:** the extension automatically finds native GNU Make in the selected
+STM32CubeIDE installation, alongside ARM GCC. No MSYS2, Git Bash, WSL or extra
+build package is required. Install ST's ST-LINK driver and use regular VS Code
+or PowerShell. See the [Windows setup guide](../extension/docs/windows.md).
 
 **macOS:** install CubeIDE in `/Applications` and install Make with
 `xcode-select --install`. Tools must support your computer's architecture.
@@ -88,7 +88,7 @@ supplied with CubeIDE, then reconnect the board. See
 [ST's manual](https://www.st.com/resource/en/user_manual/dm00603964-stm32cubeide-stmicroelectronics.pdf)
 for GDB dependencies.
 
-On Windows ARM64, check compiler, MSYS2, and USB driver compatibility separately.
+On Windows ARM64, check CubeIDE toolchain and USB driver compatibility separately.
 In SSH/WSL/containers, the extension runs on the workspace host: tools and USB
 access must be available there. Local development is the primary workflow.
 
