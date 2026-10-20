@@ -1,0 +1,20 @@
+name: Set up extension
+description: Install Node.js, pnpm and locked extension dependencies.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: '24'
+
+    - uses: pnpm/action-setup@v6
+      with:
+        package_json_file: extension/package.json
+        cache: true
+        cache_dependency_path: extension/pnpm-lock.yaml
+
+    - name: Install extension dependencies
+      shell: bash
+      working-directory: extension
+      run: pnpm install --frozen-lockfile

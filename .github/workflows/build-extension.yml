@@ -1,0 +1,78 @@
+name: Build extension
+
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.event.action == 'closed' && 'master' || github.ref }}
+  cancel-in-progress: ${{ github.event.action != 'closed' }}
+
+jobs:
+  cli:
+    name: Test CLI
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.action == 'closed' && github.event.pull_request.merge_commit_sha || github.ref }}
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache-dependency-path: go.sum
+
+      - name: Test Go CLI
+        run: go test ./...
+
+      - name: Check Go code
+        run: go vet ./...
+
+  tests:
+    name: Test extension
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.action == 'closed' && github.event.pull_request.merge_commit_sha || github.ref }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-extension
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache-dependency-path: go.sum
+
+      # The integration test executes the CLI on this runner; release targets
+      # are built separately after all tests pass.
+      - name: Build runner-native CLI for extension tests
+        run: go build -o bin/lon-linux-amd64 ./cmd/lon
+
+      - name: Test extension
+        working-directory: extension
+        run: pnpm test
+
+  checks:
+    name: PR checks
+    if: always()
+    needs: [cli, tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require successful CLI and extension checks
+        env:
+          CLI_RESULT: ${{ needs.cli.result }}
+          TESTS_RESULT: ${{ needs.tests.result }}
+        run: |
+          echo "CLI: $CLI_RESULT"
+          echo "Extension tests: $TESTS_RESULT"
+          [[ "$CLI_RESULT" == success && "$TESTS_RESULT" == success ]]

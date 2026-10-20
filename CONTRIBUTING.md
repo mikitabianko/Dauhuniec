@@ -51,9 +51,87 @@ Add `--dependencies` to also remove `extension/node_modules/`.
 
 The project's own code is licensed under the [MIT License](LICENSE). Packaging
 includes this license alongside the Go runtime license and dependency notices.
-Once a repository URL is known, add it to
-`extension/package.json`. Register the intended publisher before publishing to
+Register the intended publisher before publishing to
 the VS Code Marketplace; the current publisher is a local packaging identifier.
 
 Upload binaries, checksums and VSIX packages as release assets rather than adding
 them to source control. Review the staged file list for local paths and credentials.
+
+## GitHub Actions and releases
+
+The **Build extension** workflow checks pull requests targeting `master` when
+opened, updated, reopened or marked ready for review. These checks use GitHub's
+PR merge ref to test the proposed changes together with the target branch.
+New commits cancel outdated checks for the same PR; different PRs run independently.
+
+The separate **Release extension** workflow runs on PR closure and only proceeds
+after the pull request is merged into `master`. It reuses the CI workflow to
+validate the exact merge commit before building and publishing, including squash
+and rebase merges. Closing a PR without merging, direct pushes and version tags
+do not build a release. Release jobs do not appear in open PR validation runs.
+
+The CI workflow contains only validation jobs:
+
+- `cli` runs Go tests and vet.
+- `tests` runs in parallel with CLI validation, builds only the runner-native CLI needed by
+  the integration test, and runs the extension tests with locked pnpm dependencies.
+- `checks` reports **PR checks**, succeeding only when CLI and extension checks both pass; failures or skipped dependencies make it fail.
+
+The release workflow contains:
+
+- `validation` calls the same CI workflow on the merge commit.
+- `build` cross-compiles all six release executables and packages the universal
+  VSIX only after both test jobs succeed and the PR is merged.
+- `release` publishes the installer after packaging succeeds.
+
+Release cross-compilation runs two target builds at a time with
+`go run ./cmd/package -jobs 2`; local packaging defaults to one. Both modes
+use the same build flags and produce checksums in the same target order.
+Release Go modules and compiler outputs have a separate cache keyed by runner,
+Go version, dependency files and merge commit. Each new commit restores the
+previous compatible release cache and saves updated compiler outputs, so native
+test jobs cannot populate the release cache with incomplete platform coverage.
+
+Triggers, job dependencies and permissions live in
+`.github/workflows/build-extension.yml` (PR checks and reusable validation) and
+`.github/workflows/release-extension.yml` (release validation, packaging and
+publishing). Shared Node.js/pnpm setup and
+dependency installation live in the local composite action
+`.github/actions/setup-extension/action.yml`.
+
+Release scripts live in `scripts/ci/`:
+
+- `python3 scripts/ci/verify-vsix.py` checks that the single VSIX in `releases/`
+  contains the original `bin/` executables and required nonempty resources. Run
+  it locally after packaging; it resolves paths relative to the repository.
+- `bash scripts/ci/publish-release.sh` verifies installer checksums and creates
+  or updates a GitHub Release. It requires `GH_TOKEN`, `GH_REPO`, `RELEASE_TAG`
+  and `RELEASE_COMMIT`, and publishes assets from `releases/`.
+
+To block merging when checks fail, configure a branch protection rule or ruleset
+for `master` in GitHub Settings and require the **PR checks** status check. Run
+the workflow on a PR once so GitHub can offer that check for selection. Do not
+require release workflow checks, which do not run on open PRs.
+
+The release build archives CLI binaries and their checksums in a tar file to
+preserve executable permissions. The `native-cli` artifact contains this archive
+and is available for download after merging.
+The package filename follows `extension/package.json`. The VSIX and its
+SHA-256 checksum are available in the run's **Artifacts** section for 30 days
+(GitHub sign-in required).
+
+After the checks pass, the workflow creates a GitHub Release tagged `v<version>`
+at the merge commit, with generated notes, `dauhuniec-<version>.vsix` and
+`SHA256SUMS`. No manual tag push is needed. Set the version in
+`extension/package.json` and update `extension/CHANGELOG.md` before merging a new
+release. If the version already has a release, its downloadable assets are
+replaced; the existing tag stays at its original commit. Bump the version for a
+new release with its own tag.
+
+Users download the installer from
+[Releases](https://github.com/mikitabianko/Dauhuniec/releases/latest) and select
+**Extensions → … → Install from VSIX…** in VS Code.
+
+No Marketplace token or additional secret is needed. Only the release job receives
+`contents: write` through the built-in `GITHUB_TOKEN`; build jobs have read access.
+Repository or organization policy must allow GitHub Actions to create releases.

@@ -6,6 +6,11 @@
   "version": "0.1.0",
   "publisher": "dauhuniec",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mikitabianko/Dauhuniec.git",
+    "directory": "extension"
+  },
   "engines": {
     "vscode": "^1.95.0"
   },
@@ -51,7 +56,7 @@
     "pretest": "node scripts/prepare.cjs",
     "test": "pnpm run compile && node --test dist/test/service.test.js dist/test/userCode.test.js dist/test/cubeMX.test.js dist/test/serialConsole.test.js dist/test/targetBoard.test.js dist/test/documentation.test.js",
     "vscode:prepublish": "pnpm run compile",
-    "package": "node scripts/prepare.cjs && vsce package --no-dependencies --allow-missing-repository --out ../releases/dauhuniec-0.1.0.vsix",
+    "package": "node scripts/prepare.cjs && node scripts/package.cjs",
     "test:host": "pnpm run compile && node scripts/test-host.cjs"
   },
   "devDependencies": {

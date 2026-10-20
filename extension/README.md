@@ -192,8 +192,12 @@ board flashing/debug sessions still need verification on those systems.
 
 ## Installation and development
 
-For a local package, use **Extensions → … → Install from VSIX…** and select the
-provided `dauhuniec-0.1.0.vsix`. The `dauhuniec` publisher in this source
+Download the `.vsix` from the latest
+[GitHub Release](https://github.com/mikitabianko/Dauhuniec/releases/latest), then
+use **Extensions → … → Install from VSIX…** and select the downloaded file.
+Development packages are also available under **Artifacts** in successful
+[Release extension runs](https://github.com/mikitabianko/Dauhuniec/actions/workflows/release-extension.yml)
+(GitHub sign-in required; unzip the download first). The `dauhuniec` publisher in this source
 is a local packaging identifier; register your publisher before Marketplace publishing.
 
 Maintainers build the native binaries from the repository root with
