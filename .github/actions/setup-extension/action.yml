@@ -1,5 +1,5 @@
 name: Set up extension
-description: Install Node.js and pnpm dependencies, then restore and verify the native CLI bundle.
+description: Install Node.js, pnpm and locked extension dependencies.
 
 runs:
   using: composite
@@ -13,16 +13,6 @@ runs:
         package_json_file: extension/package.json
         cache: true
         cache_dependency_path: extension/pnpm-lock.yaml
-
-    - uses: actions/download-artifact@v8
-      with:
-        name: native-cli
-
-    - name: Restore and verify CLI binaries
-      shell: bash
-      run: |
-        tar -xf cli-bundle.tar
-        sha256sum --check SHA256SUMS
 
     - name: Install extension dependencies
       shell: bash

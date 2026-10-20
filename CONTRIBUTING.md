@@ -70,15 +70,17 @@ without merging, direct pushes and version tags do not build a release.
 
 The workflow separates CLI validation, extension tests, packaging and publishing:
 
-- `cli` runs Go tests and vet, then cross-compiles all six native executables.
-- `tests` downloads the CLI binaries and runs the extension tests with locked pnpm dependencies.
+- `cli` runs Go tests and vet.
+- `tests` runs after CLI validation, builds only the runner-native CLI needed by
+  the integration test, and runs the extension tests with locked pnpm dependencies.
 - `checks` reports **PR checks**, succeeding only when CLI and extension checks both pass; failures or skipped dependencies make it fail.
-- `build` packages the universal VSIX only after both jobs succeed, reusing the CLI binaries.
+- `build` cross-compiles all six release executables and packages the universal
+  VSIX only after both test jobs succeed and the PR is merged.
 - `release` publishes the installer after packaging succeeds.
 
 The workflow keeps triggers, job dependencies and permissions in
-`.github/workflows/build-extension.yml`. Shared Node.js/pnpm setup, CLI artifact
-restoration and dependency installation live in the local composite action
+`.github/workflows/build-extension.yml`. Shared Node.js/pnpm setup and
+dependency installation live in the local composite action
 `.github/actions/setup-extension/action.yml`.
 
 Release scripts live in `scripts/ci/`:
@@ -95,9 +97,9 @@ for `master` in GitHub Settings and require the **PR checks** status check. Run
 the workflow on a PR once so GitHub can offer that check for selection. Do not
 require `build` or `release`, which intentionally skip PR validation runs.
 
-CLI binaries and their checksums pass between jobs in a tar archive to preserve
-executable permissions. Each consuming job verifies the checksums before use.
-The `native-cli` artifact contains this archive and is also available for download.
+The release build archives CLI binaries and their checksums in a tar file to
+preserve executable permissions. The `native-cli` artifact contains this archive
+and is available for download after merging.
 The package filename follows `extension/package.json`. The VSIX and its
 SHA-256 checksum are available in the run's **Artifacts** section for 30 days
 (GitHub sign-in required).

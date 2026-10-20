@@ -15,7 +15,7 @@ concurrency:
 jobs:
   cli:
     if: github.event.action != 'closed' || github.event.pull_request.merged == true
-    name: Test and build CLI
+    name: Test CLI
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -35,21 +35,6 @@ jobs:
       - name: Check Go code
         run: go vet ./...
 
-      - name: Build CLI for Windows, macOS and Linux (x64 and ARM64)
-        run: go run ./cmd/package
-
-      # A tar archive preserves executable permissions between jobs.
-      - name: Archive CLI binaries and checksums
-        run: tar -cf cli-bundle.tar bin SHA256SUMS
-
-      - name: Upload CLI bundle
-        uses: actions/upload-artifact@v7
-        with:
-          name: native-cli
-          path: cli-bundle.tar
-          if-no-files-found: error
-          retention-days: 30
-
   tests:
     name: Test extension
     needs: cli
@@ -62,6 +47,16 @@ jobs:
           persist-credentials: false
 
       - uses: ./.github/actions/setup-extension
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache-dependency-path: go.sum
+
+      # The integration test executes the CLI on this runner; release targets
+      # are built separately after all tests pass.
+      - name: Build runner-native CLI for extension tests
+        run: go build -o bin/lon-linux-amd64 ./cmd/lon
 
       - name: Test extension
         working-directory: extension
@@ -88,7 +83,7 @@ jobs:
     if: github.event.action == 'closed' && github.event.pull_request.merged == true
     needs: [cli, tests]
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -98,6 +93,26 @@ jobs:
           persist-credentials: false
 
       - uses: ./.github/actions/setup-extension
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache-dependency-path: go.sum
+
+      - name: Build CLI for Windows, macOS and Linux (x64 and ARM64)
+        run: go run ./cmd/package
+
+      # A tar archive preserves executable permissions in the download.
+      - name: Archive CLI binaries and checksums
+        run: tar -cf cli-bundle.tar bin SHA256SUMS
+
+      - name: Upload CLI bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-cli
+          path: cli-bundle.tar
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Read package version
         id: version
