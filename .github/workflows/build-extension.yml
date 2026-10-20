@@ -24,10 +24,9 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      - uses: actions/setup-go@v7
+      - uses: ./.github/actions/setup-go
         with:
-          go-version: stable
-          cache-dependency-path: go.sum
+          scope: cli
 
       - name: Test Go CLI
         run: go test ./...
@@ -47,13 +46,17 @@ jobs:
 
       - uses: ./.github/actions/setup-extension
 
-      - uses: actions/setup-go@v7
+      - name: Test CI release scripts
+        run: |
+          node --test scripts/ci/plan-release.test.cjs
+          python3 -m unittest discover -s scripts/ci -p 'test_*.py'
+
+      - uses: ./.github/actions/setup-go
         with:
-          go-version: stable
-          cache-dependency-path: go.sum
+          scope: extension-tests
 
       # The integration test executes the CLI on this runner; release targets
-      # are built separately after all tests pass.
+      # are built separately by the release workflow.
       - name: Build runner-native CLI for extension tests
         run: go build -o bin/lon-linux-amd64 ./cmd/lon
 

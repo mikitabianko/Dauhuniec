@@ -1,0 +1,40 @@
+name: Set up Go
+description: Install Go and restore shared modules and job-specific compiler caches.
+
+inputs:
+  scope:
+    description: Compiler cache scope (cli, extension-tests or release).
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v7
+      id: go
+      with:
+        go-version: stable
+        cache: false
+
+    - name: Locate Go caches
+      id: paths
+      shell: bash
+      run: |
+        echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+        echo "modules=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+        echo "image=$ImageOS" >> "$GITHUB_OUTPUT"
+
+    - name: Cache Go modules
+      uses: actions/cache@v6
+      with:
+        path: ${{ steps.paths.outputs.modules }}
+        key: go-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}
+
+    # Cache entries are immutable. Include the commit so successful builds save
+    # updated compiler outputs, and restore the previous compatible entry.
+    - name: Cache Go compiler outputs
+      uses: actions/cache@v6
+      with:
+        path: ${{ steps.paths.outputs.build }}
+        key: go-build-${{ inputs.scope }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.paths.outputs.image }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.sha }}
+        restore-keys: |
+          go-build-${{ inputs.scope }}-${{ runner.os }}-${{ runner.arch }}-${{ steps.paths.outputs.image }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-
