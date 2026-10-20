@@ -73,7 +73,7 @@ do not build a release. Release jobs do not appear in open PR validation runs.
 The CI workflow contains only validation jobs:
 
 - `cli` runs Go tests and vet.
-- `tests` runs after CLI validation, builds only the runner-native CLI needed by
+- `tests` runs in parallel with CLI validation, builds only the runner-native CLI needed by
   the integration test, and runs the extension tests with locked pnpm dependencies.
 - `checks` reports **PR checks**, succeeding only when CLI and extension checks both pass; failures or skipped dependencies make it fail.
 
@@ -83,6 +83,14 @@ The release workflow contains:
 - `build` cross-compiles all six release executables and packages the universal
   VSIX only after both test jobs succeed and the PR is merged.
 - `release` publishes the installer after packaging succeeds.
+
+Release cross-compilation runs two target builds at a time with
+`go run ./cmd/package -jobs 2`; local packaging defaults to one. Both modes
+use the same build flags and produce checksums in the same target order.
+Release Go modules and compiler outputs have a separate cache keyed by runner,
+Go version, dependency files and merge commit. Each new commit restores the
+previous compatible release cache and saves updated compiler outputs, so native
+test jobs cannot populate the release cache with incomplete platform coverage.
 
 Triggers, job dependencies and permissions live in
 `.github/workflows/build-extension.yml` (PR checks and reusable validation) and

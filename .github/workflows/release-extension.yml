@@ -34,12 +34,32 @@ jobs:
       - uses: ./.github/actions/setup-extension
 
       - uses: actions/setup-go@v7
+        id: go
         with:
           go-version: stable
-          cache-dependency-path: go.sum
+          cache: false
+
+      - name: Locate Go caches
+        id: go-cache
+        run: |
+          echo "build=$(go env GOCACHE)" >> "$GITHUB_OUTPUT"
+          echo "modules=$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+          echo "image=$ImageOS" >> "$GITHUB_OUTPUT"
+
+      # Keep cross-compilation outputs separate from the native test cache.
+      # A new commit saves an updated cache; earlier builds seed incremental work.
+      - name: Cache release Go modules and build outputs
+        uses: actions/cache@v6
+        with:
+          path: |
+            ${{ steps.go-cache.outputs.build }}
+            ${{ steps.go-cache.outputs.modules }}
+          key: release-go-${{ runner.os }}-${{ runner.arch }}-${{ steps.go-cache.outputs.image }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-${{ github.event.pull_request.merge_commit_sha }}
+          restore-keys: |
+            release-go-${{ runner.os }}-${{ runner.arch }}-${{ steps.go-cache.outputs.image }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('go.mod', 'go.sum') }}-
 
       - name: Build CLI for Windows, macOS and Linux (x64 and ARM64)
-        run: go run ./cmd/package
+        run: go run ./cmd/package -jobs 2
 
       # A tar archive preserves executable permissions in the download.
       - name: Archive CLI binaries and checksums
