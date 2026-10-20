@@ -56,7 +56,7 @@ the CLI for Windows, macOS and Linux on x64 and ARM64.
 
 Pull requests targeting `master` show CLI and extension test results under **Checks**.
 Installer builds and releases run automatically after those pull requests are merged.
-To download a build artifact, open [Build extension in GitHub Actions](https://github.com/mikitabianko/Dauhuniec/actions/workflows/build-extension.yml),
+To download a build artifact, open [Release extension in GitHub Actions](https://github.com/mikitabianko/Dauhuniec/actions/workflows/release-extension.yml),
 select a successful run and download `dauhuniec-<version>-vsix` under **Artifacts**.
 Sign in to GitHub to download the artifact, then unzip it to get the `.vsix` and
 its `SHA256SUMS` file. Build artifacts are retained for 30 days; tagged releases

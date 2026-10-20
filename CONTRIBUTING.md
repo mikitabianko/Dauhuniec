@@ -64,22 +64,30 @@ opened, updated, reopened or marked ready for review. These checks use GitHub's
 PR merge ref to test the proposed changes together with the target branch.
 New commits cancel outdated checks for the same PR; different PRs run independently.
 
-Packaging and publishing run only after the pull request is merged into `master`,
-using its exact merge commit, including squash and rebase merges. Closing a PR
-without merging, direct pushes and version tags do not build a release.
+The separate **Release extension** workflow runs on PR closure and only proceeds
+after the pull request is merged into `master`. It reuses the CI workflow to
+validate the exact merge commit before building and publishing, including squash
+and rebase merges. Closing a PR without merging, direct pushes and version tags
+do not build a release. Release jobs do not appear in open PR validation runs.
 
-The workflow separates CLI validation, extension tests, packaging and publishing:
+The CI workflow contains only validation jobs:
 
 - `cli` runs Go tests and vet.
 - `tests` runs after CLI validation, builds only the runner-native CLI needed by
   the integration test, and runs the extension tests with locked pnpm dependencies.
 - `checks` reports **PR checks**, succeeding only when CLI and extension checks both pass; failures or skipped dependencies make it fail.
+
+The release workflow contains:
+
+- `validation` calls the same CI workflow on the merge commit.
 - `build` cross-compiles all six release executables and packages the universal
   VSIX only after both test jobs succeed and the PR is merged.
 - `release` publishes the installer after packaging succeeds.
 
-The workflow keeps triggers, job dependencies and permissions in
-`.github/workflows/build-extension.yml`. Shared Node.js/pnpm setup and
+Triggers, job dependencies and permissions live in
+`.github/workflows/build-extension.yml` (PR checks and reusable validation) and
+`.github/workflows/release-extension.yml` (release validation, packaging and
+publishing). Shared Node.js/pnpm setup and
 dependency installation live in the local composite action
 `.github/actions/setup-extension/action.yml`.
 
@@ -95,7 +103,7 @@ Release scripts live in `scripts/ci/`:
 To block merging when checks fail, configure a branch protection rule or ruleset
 for `master` in GitHub Settings and require the **PR checks** status check. Run
 the workflow on a PR once so GitHub can offer that check for selection. Do not
-require `build` or `release`, which intentionally skip PR validation runs.
+require release workflow checks, which do not run on open PRs.
 
 The release build archives CLI binaries and their checksums in a tar file to
 preserve executable permissions. The `native-cli` artifact contains this archive

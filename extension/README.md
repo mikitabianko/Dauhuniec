@@ -196,7 +196,7 @@ Download the `.vsix` from the latest
 [GitHub Release](https://github.com/mikitabianko/Dauhuniec/releases/latest), then
 use **Extensions → … → Install from VSIX…** and select the downloaded file.
 Development packages are also available under **Artifacts** in successful
-[Build extension runs](https://github.com/mikitabianko/Dauhuniec/actions/workflows/build-extension.yml)
+[Release extension runs](https://github.com/mikitabianko/Dauhuniec/actions/workflows/release-extension.yml)
 (GitHub sign-in required; unzip the download first). The `dauhuniec` publisher in this source
 is a local packaging identifier; register your publisher before Marketplace publishing.
 
