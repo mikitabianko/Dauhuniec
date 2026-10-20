@@ -182,6 +182,24 @@ func compilerConfiguration(root string, template map[string]any) map[string]any 
 	return template
 }
 
+func migrateSettings(old map[string]any) {
+	for _, prefix := range []string{"lon.", "codeready."} {
+		for key, value := range old {
+			if strings.HasPrefix(key, prefix) {
+				renamed := "dauhuniec." + strings.TrimPrefix(key, prefix)
+				if _, exists := old[renamed]; !exists {
+					old[renamed] = value
+				}
+				delete(old, key)
+			}
+		}
+	}
+	if shell, _ := old["dauhuniec.shell"].(string); shell != "" && old["dauhuniec.makePath"] == old["dauhuniec.make"] {
+		delete(old, "dauhuniec.makePath")
+	}
+	delete(old, "dauhuniec.shell")
+}
+
 func configureVSCode(root, plugins string, cfg config) error {
 	destination := filepath.Join(root, ".vscode")
 	documents := make(map[string]map[string]any)
@@ -192,17 +210,7 @@ func configureVSCode(root, plugins string, cfg config) error {
 			return err
 		}
 		if name == "settings.json" {
-			for _, prefix := range []string{"lon.", "codeready."} {
-				for key, value := range old {
-					if strings.HasPrefix(key, prefix) {
-						renamed := "dauhuniec." + strings.TrimPrefix(key, prefix)
-						if _, exists := old[renamed]; !exists {
-							old[renamed] = value
-						}
-						delete(old, key)
-					}
-				}
-			}
+			migrateSettings(old)
 			for key, value := range cfg.Tools {
 				old["dauhuniec."+key] = value
 			}

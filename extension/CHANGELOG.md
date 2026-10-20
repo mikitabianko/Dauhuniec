@@ -1,7 +1,14 @@
 # Changelog
 
+## 0.1.2
+
+- Simplify Make discovery and extract build environment preparation and legacy settings migration without changing behavior.
+
 ## 0.1.1
 
+- Use native GNU Make from CubeIDE on Windows without MSYS2; create build directories and clean them in the CLI, and include Windows setup instructions in Resources and the Command Palette.
+- Validate manually selected tool paths, report selection failures and persist accepted paths in project settings.
+- Add official CubeMX, CubeIDE and ST-LINK driver download links in Resources, setup and missing-CubeMX notifications.
 - Publish verified release packages to Visual Studio Marketplace through GitHub Actions using Microsoft Entra OIDC.
 - Remove the temporary Marketplace identity inspection workflow and redundant CLI build artifact.
 

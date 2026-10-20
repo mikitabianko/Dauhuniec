@@ -34,9 +34,8 @@ For the build, flash and debug workflow, install:
 
 Platform setup:
 
-- **Windows:** install MSYS2 in `C:\msys64`, then run `pacman -S --needed make`
-  in its terminal. Use `C:\msys64\usr\bin\make.exe` with the accompanying
-  `sh.exe`. Install ST's ST-LINK USB driver.
+- **Windows:** Make is detected automatically inside STM32CubeIDE. No separate
+  build environment or shell installation is needed. Install ST's ST-LINK USB driver.
 - **macOS:** install Command Line Tools with `xcode-select --install` to provide Make.
 - **Linux:** install `make` through your package manager and the ST-LINK udev rules
   supplied with CubeIDE. Ensure your user has access to the USB device.
@@ -80,7 +79,7 @@ pnpm test
 pnpm run package
 ```
 
-Install the resulting `releases/dauhuniec-0.1.1.vsix` from the repository root.
+Install the resulting `releases/dauhuniec-0.1.2.vsix` from the repository root.
 The build also produces six native CLI executables in `bin/` and a `SHA256SUMS`
 file. These outputs are excluded from source control.
 

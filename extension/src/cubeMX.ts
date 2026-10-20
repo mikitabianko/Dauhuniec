@@ -12,11 +12,25 @@ export interface CubeMXEnvironment {
 
 const environment = (): CubeMXEnvironment => ({ platform: process.platform, home: os.homedir(), env: process.env });
 
+function configuredLocation(value: string, host: CubeMXEnvironment): string {
+  const trimmed = value.trim();
+  if (host.platform !== 'win32') return trimmed;
+  // Windows' Copy as path includes quotes; settings are paths, not shell commands.
+  const unquoted = trimmed.replace(/^"(.*)"$/, '$1');
+  return unquoted.replace(/%([^%]+)%/g, (match, name: string) => {
+    const key = Object.keys(host.env).find(key => key.toLowerCase() === name.toLowerCase());
+    return key ? host.env[key] ?? match : match;
+  });
+}
+
 export function cubeMXLocations({ platform, home, env }: CubeMXEnvironment): string[] {
   const p = platform === 'win32' ? path.win32 : path.posix;
   const locations = [p.join(home, 'STM32CubeMX'), p.join(home, 'STM32Cube', 'STM32CubeMX'), p.join(home, '.stm32cubemx')];
   if (platform === 'win32') {
-    for (const base of [env.ProgramFiles || 'C:\\Program Files', env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', env.LOCALAPPDATA]) {
+    const localAppData = env.LOCALAPPDATA || p.join(home, 'AppData', 'Local');
+    locations.push(p.join(localAppData, 'Programs', 'STM32CubeMX'));
+    for (const base of [env.ProgramW6432, env.ProgramFiles || 'C:\\Program Files', env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)',
+      localAppData, p.join(localAppData, 'Programs')]) {
       if (base) locations.push(p.join(base, 'STMicroelectronics', 'STM32Cube', 'STM32CubeMX'), p.join(base, 'STMicroelectronics', 'STM32CubeMX'));
     }
   } else if (platform === 'darwin') {
@@ -59,7 +73,7 @@ async function resolveLocation(location: string, platform: NodeJS.Platform): Pro
 export async function findCubeMX(configuredPath = '', host = environment(), locations = cubeMXLocations(host)): Promise<string | undefined> {
   if (!['win32', 'darwin', 'linux'].includes(host.platform)) throw new Error(`STM32CubeMX launch is not supported on ${host.platform}.`);
   if (configuredPath.trim()) {
-    const found = await resolveLocation(configuredPath.trim(), host.platform);
+    const found = await resolveLocation(configuredLocation(configuredPath, host), host.platform);
     if (!found) throw new Error(`STM32CubeMX was not found at "${configuredPath}". Check dauhuniec.cubeMXPath or install STM32CubeMX.`);
     return found;
   }
@@ -89,12 +103,20 @@ export function cubeMXLaunch(application: string, ioc?: string, platform = proce
 export async function launchCubeMX(application: string, ioc?: string): Promise<void> {
   const { command, args } = cubeMXLaunch(application, ioc);
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(command, args, { detached: true, stdio: 'ignore', shell: false });
-    child.once('error', error => reject(new Error(`Could not start STM32CubeMX: ${error.message}`)));
-    if (command === '/usr/bin/open') {
-      child.once('exit', code => code === 0 ? resolve() : reject(new Error(`Could not start STM32CubeMX (open exited with code ${code}).`)));
-    } else {
-      child.once('spawn', () => { child.unref(); resolve(); });
-    }
+    const child = spawn(command, args, { detached: true, stdio: 'ignore', shell: false, windowsHide: true });
+    let timer: NodeJS.Timeout | undefined;
+    const finish = (error?: Error) => {
+      clearTimeout(timer);
+      child.removeListener('exit', onExit);
+      child.unref();
+      if (error) reject(error); else resolve();
+    };
+    const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+      finish(code === 0 ? undefined : new Error(`Could not start STM32CubeMX at "${application}" (${signal ? `signal ${signal}` : `exit code ${code}`}). Try launching it directly to check its installation and Java runtime.`));
+    };
+    child.once('error', error => finish(new Error(`Could not start STM32CubeMX at "${application}": ${error.message}`)));
+    child.once('exit', onExit);
+    // Catch immediate launcher/JVM failures before detaching. This does not prove GUI readiness.
+    if (command !== '/usr/bin/open') child.once('spawn', () => { timer = setTimeout(() => finish(), 1000); });
   });
 }

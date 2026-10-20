@@ -9,6 +9,8 @@ test('installation locations cover desktop platforms and platform-specific PATH 
   const windows = cubeMXLocations({ platform: 'win32', home: 'C:\\Users\\Dev', env: { ProgramFiles: 'D:\\Program Files', LOCALAPPDATA: 'C:\\Users\\Dev\\AppData\\Local', Path: 'D:\\Tools;"E:\\Cube Tools"' } });
   assert.ok(windows.includes('D:\\Program Files\\STMicroelectronics\\STM32Cube\\STM32CubeMX'));
   assert.ok(windows.includes('C:\\Users\\Dev\\AppData\\Local\\STMicroelectronics\\STM32Cube\\STM32CubeMX'));
+  assert.ok(windows.includes('C:\\Users\\Dev\\AppData\\Local\\Programs\\STM32CubeMX'));
+  assert.ok(windows.includes('C:\\Users\\Dev\\AppData\\Local\\Programs\\STMicroelectronics\\STM32Cube\\STM32CubeMX'));
   assert.ok(windows.includes('E:\\Cube Tools'));
   const mac = cubeMXLocations({ platform: 'darwin', home: '/Users/dev', env: {} });
   assert.ok(mac.includes('/Applications'));
@@ -17,6 +19,36 @@ test('installation locations cover desktop platforms and platform-specific PATH 
   assert.ok(linux.includes('/usr/local/STMicroelectronics/STM32Cube/STM32CubeMX'));
   assert.ok(linux.includes('/home/dev/STM32CubeMX'));
   assert.ok(linux.includes('/custom/tools'));
+});
+
+test('Windows locations include per-user installs without LOCALAPPDATA and native Program Files', () => {
+  const locations = cubeMXLocations({ platform: 'win32', home: 'D:\\Users\\Dev', env: {
+    ProgramW6432: 'D:\\Program Files', ProgramFiles: 'D:\\Program Files (x86)'
+  } });
+  assert.ok(locations.includes('D:\\Users\\Dev\\AppData\\Local\\Programs\\STM32CubeMX'));
+  assert.ok(locations.includes('D:\\Program Files\\STMicroelectronics\\STM32Cube\\STM32CubeMX'));
+  assert.equal(locations.length, new Set(locations).size);
+});
+
+test('Windows detection resolves STM32CubeMX.exe from an installation directory', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'dauhuniec-cubemx-win-'));
+  try {
+    const host = { platform: 'win32' as const, home: root, env: {} };
+    const app = path.join(root, 'Programs', 'STM32CubeMX', 'STM32CubeMX.exe');
+    await fs.mkdir(path.dirname(app), { recursive: true });
+    await fs.writeFile(app, '');
+    assert.equal(await findCubeMX('', host, [path.join(root, 'missing'), path.dirname(app)]), app);
+    if (process.platform === 'win32') {
+      assert.equal(await findCubeMX('', { ...host, env: { LOCALAPPDATA: root } }), app);
+    }
+    assert.equal(await findCubeMX(path.dirname(app), host), app);
+    assert.equal(await findCubeMX(app, host), app);
+    assert.equal(await findCubeMX(`  "${app}"  `, host), app);
+    assert.equal(await findCubeMX('"%LOCALAPPDATA%/Programs/STM32CubeMX"', {
+      ...host, env: { LocalAppData: root }
+    }), app);
+    await assert.rejects(findCubeMX('%UNKNOWN_CUBEMX_LOCATION%/STM32CubeMX.exe', host), /not found/);
+  } finally { await fs.rm(root, { recursive: true, force: true }); }
 });
 
 test('launch arguments open an IOC or the new-project UI without shell interpolation', () => {
@@ -64,6 +96,41 @@ test('macOS detection accepts versioned app bundles but rejects stale bundles', 
 
 test('launch errors are reported instead of becoming unhandled process errors', async () => {
   await assert.rejects(launchCubeMX(path.join(os.tmpdir(), 'nonexistent-dauhuniec-cubemx', 'STM32CubeMX')), /Could not start STM32CubeMX/);
+});
+
+test('immediate native launcher failures are reported with their exit code', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'dauhuniec-cubemx-failure-'));
+  try {
+    const app = path.join(root, process.platform === 'win32' ? 'STM32CubeMX.exe' : 'STM32CubeMX');
+    let ioc: string | undefined;
+    if (process.platform === 'win32') {
+      await fs.copyFile(process.execPath, app);
+      ioc = path.join(root, 'exit.ioc');
+      await fs.writeFile(ioc, 'process.exit(23);');
+    } else {
+      // Avoid making the one-second early-exit check depend on Node startup under load.
+      await fs.writeFile(app, '#!/bin/sh\nexit 23\n', { mode: 0o755 });
+    }
+    await assert.rejects(launchCubeMX(app, ioc), /Could not start STM32CubeMX.*exit code 23/);
+  } finally { await fs.rm(root, { recursive: true, force: true }); }
+});
+
+test('Windows native launch preserves Unicode, spaces and shell metacharacters in IOC paths', { skip: process.platform !== 'win32' }, async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'Cube MX тест &-'));
+  try {
+    // A real PE executable exercises Windows process creation and argv quoting.
+    const app = path.join(root, 'STM32CubeMX.exe');
+    await fs.copyFile(process.execPath, app);
+    const result = path.join(root, 'args.json');
+    const ioc = path.join(root, 'Плата with spaces & $name.ioc');
+    await fs.writeFile(ioc, `require('node:fs').writeFileSync(${JSON.stringify(result)}, JSON.stringify({ argv: process.argv.slice(1), flags: process.execArgv }));`);
+    await launchCubeMX(app, ioc);
+    for (let attempt = 0; attempt < 100; attempt++) {
+      if (await fs.stat(result).then(() => true, () => false)) break;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    assert.deepEqual(JSON.parse(await fs.readFile(result, 'utf8')), { argv: [ioc], flags: ['-i'] });
+  } finally { await fs.rm(root, { recursive: true, force: true }); }
 });
 
 test('native launch delivers exact project arguments to an executable', { skip: process.platform === 'win32' }, async () => {

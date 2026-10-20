@@ -28,7 +28,7 @@ CLIs are supplied for Windows, macOS, and Linux on x86_64 and ARM64.
    Generate code in the project root, which should contain one `.ioc` file and a `Makefile`.
 3. Install the tools listed below.
 4. In VS Code, select **Extensions → … → Install from VSIX…** and install
-   `releases/dauhuniec-0.1.1.vsix`.
+   `releases/dauhuniec-0.1.2.vsix`.
 5. Open your project folder and select **Dauhuniec → Configure project**.
    The extension also offers configuration when it first detects a project.
 6. If tools are not found, select the CubeIDE directory or GNU Make executable.
@@ -73,10 +73,10 @@ Nested user blocks are preserved in full.
   for Dauhuniec and can be installed manually.
 - GNU Make. Docker, hvy, IAR, CMake, and probe-rs are not required for this workflow.
 
-**Windows:** install [MSYS2](https://www.msys2.org/) in `C:/msys64` and run
-`pacman -S --needed make` in its terminal. The extension uses
-`C:/msys64/usr/bin/make.exe` with `sh.exe` in the same directory. ARM GCC comes
-from CubeIDE. Install ST's ST-LINK driver. Use regular VS Code/PowerShell rather than WSL.
+**Windows:** the extension automatically finds native GNU Make in the selected
+STM32CubeIDE installation, alongside ARM GCC. No MSYS2, Git Bash, WSL or extra
+build package is required. Install ST's ST-LINK driver and use regular VS Code
+or PowerShell. See the [Windows setup guide](../extension/docs/windows.md).
 
 **macOS:** install CubeIDE in `/Applications` and install Make with
 `xcode-select --install`. Tools must support your computer's architecture.
@@ -88,7 +88,7 @@ supplied with CubeIDE, then reconnect the board. See
 [ST's manual](https://www.st.com/resource/en/user_manual/dm00603964-stm32cubeide-stmicroelectronics.pdf)
 for GDB dependencies.
 
-On Windows ARM64, check compiler, MSYS2, and USB driver compatibility separately.
+On Windows ARM64, check CubeIDE toolchain and USB driver compatibility separately.
 In SSH/WSL/containers, the extension runs on the workspace host: tools and USB
 access must be available there. Local development is the primary workflow.
 
@@ -287,7 +287,7 @@ pnpm run package
 ```
 
 Output: six CLIs in `bin/`, `SHA256SUMS`, and the installable
-`releases/dauhuniec-0.1.1.vsix`. No separate ZIP is created. Binaries,
+`releases/dauhuniec-0.1.2.vsix`. No separate ZIP is created. Binaries,
 dependencies, compiled files, and VSIX packages are excluded from Git.
 
 Extension sources are in `extension/src`; native logic is in the Go files under

@@ -83,37 +83,43 @@ func discoverTools(opts options, previous map[string]string) discovery {
 			}
 		}
 	}
-	makePath := opts.make
-	if makePath == "" && regularFile(previous["make"]) {
-		makePath = previous["make"]
-	}
-	if makePath == "" {
-		if runtime.GOOS == "windows" {
-			makePath = "C:/msys64/usr/bin/make.exe"
-		} else {
-			makePath, _ = exec.LookPath("make")
-		}
-	}
+	makePath := findMake(opts.make, plugins, previous)
 	if !regularFile(makePath) {
-		d.Checks = append(d.Checks, check{"make", "GNU Make", "error", "Install GNU Make (Windows: MSYS2 make and shell), or choose its executable.", "selectMake"})
-	} else {
-		path, err := canonical(makePath)
-		if err != nil {
-			d.Checks = append(d.Checks, check{"make", "GNU Make", "error", err.Error(), "selectMake"})
-		} else {
-			d.Tools["make"] = path
-			d.Checks = append(d.Checks, check{"make", "GNU Make", "ok", path, ""})
-			if runtime.GOOS == "windows" {
-				shell := filepath.Join(filepath.Dir(path), "sh.exe")
-				if regularFile(shell) {
-					d.Tools["shell"] = shell
-				} else {
-					d.Checks = append(d.Checks, check{"shell", "MSYS2 shell", "error", "Choose MSYS2 make.exe with sh.exe in the same bin directory.", "selectMake"})
-				}
-			}
+		message, action := "Install GNU Make, or choose its executable.", "selectMake"
+		if runtime.GOOS == "windows" {
+			message, action = "Native GNU Make not found; select a full STM32CubeIDE installation including its Make tools.", "selectCubeIDE"
 		}
+		d.Checks = append(d.Checks, check{"make", "GNU Make", "error", message, action})
+	} else if path, err := canonical(makePath); err != nil {
+		d.Checks = append(d.Checks, check{"make", "GNU Make", "error", err.Error(), "selectMake"})
+	} else {
+		d.Tools["make"] = path
+		d.Checks = append(d.Checks, check{"make", "GNU Make", "ok", path, ""})
 	}
 	return d
+}
+
+func findMake(explicit, plugins string, previous map[string]string) string {
+	if runtime.GOOS == "windows" && previous["shell"] != "" && explicit == previous["make"] {
+		explicit = ""
+	}
+	if explicit != "" {
+		return explicit
+	}
+	if runtime.GOOS == "windows" {
+		// Saved MSYS Make depends on a separate runtime and shell. Use native
+		// Make from the selected CubeIDE installation instead.
+		if plugins == "" {
+			return ""
+		}
+		path, _ := findTool(plugins, "make", "make")
+		return path
+	}
+	if regularFile(previous["make"]) {
+		return previous["make"]
+	}
+	path, _ := exec.LookPath("make")
+	return path
 }
 
 func checkErrors(checks []check) string {

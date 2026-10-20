@@ -10,6 +10,14 @@ import { binaryFor, execute, inspect, Report, ToolOptions, toolArgs } from './se
 
 interface Node { label: string; description?: string; icon?: string; command?: string; root?: string; children?: Node[]; detail?: string; }
 
+const officialDownloads = {
+  cubeMX: { label: 'STM32CubeMX', detail: 'Create projects and generate STM32 code.', url: 'https://www.st.com/en/development-tools/stm32cubemx.html' },
+  cubeIDE: { label: 'STM32CubeIDE', detail: 'Install the desktop IDE with ARM GCC, GDB, Make, ST-LINK server and CubeProgrammer.', url: 'https://www.st.com/en/development-tools/stm32cubeide.html' },
+  stlink: { label: 'ST-LINK USB driver (STSW-LINK009)', detail: 'Windows USB driver for connecting an ST-LINK probe.', url: 'https://www.st.com/en/development-tools/stsw-link009.html' }
+};
+
+type DownloadTool = keyof typeof officialDownloads;
+
 class ProjectView implements vscode.TreeDataProvider<Node> {
   private readonly changed = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.changed.event;
@@ -36,6 +44,8 @@ export async function activate(context: vscode.ExtensionContext) {
   resourcesView.nodes = [
     { label: 'Documentation · MCU / Board / HAL / RTOS', command: 'dauhuniec.documentation', icon: 'library' },
     { label: 'Serial Monitor', command: 'dauhuniec.serialMonitor', icon: 'terminal' },
+    { label: 'Install Tools / Official Downloads', command: 'dauhuniec.installTools', icon: 'cloud-download' },
+    ...(process.platform === 'win32' ? [{ label: 'Windows Setup Instructions', command: 'dauhuniec.windowsGuide', icon: 'book' }] : []),
     { label: 'Getting Started', command: 'dauhuniec.guide', icon: 'book' }
   ];
   const toolbar = new ProjectToolbar();
@@ -129,6 +139,8 @@ export async function activate(context: vscode.ExtensionContext) {
       { label: report.ready ? 'Ready for VS Code' : 'Setup needs attention', icon: report.ready ? 'pass' : 'warning', command: report.ready ? 'dauhuniec.check' : 'dauhuniec.configure', root },
       ...issues.map(check => ({ label: check.label, description: check.message, detail: check.message, root, icon: check.status === 'error' ? 'error' : 'warning', command: check.action === 'selectCubeIDE' ? 'dauhuniec.chooseIDE' : check.action === 'selectMake' ? 'dauhuniec.chooseMake' : 'dauhuniec.configure' })),
       action('Configure Project', 'dauhuniec.configure', 'tools'),
+      ...(issues.some(check => check.action === 'selectCubeIDE' || check.action === 'selectMake')
+        ? [action('Install Tools / Official Downloads', 'dauhuniec.installTools', 'cloud-download')] : []),
       action('Open in STM32CubeMX', 'dauhuniec.openIOC', 'file-code'),
       action('Documentation', 'dauhuniec.documentation', 'library'),
       ...(report.configured ? [action('Clean Build', 'dauhuniec.clean', 'clear-all')] : [])
@@ -194,12 +206,39 @@ export async function activate(context: vscode.ExtensionContext) {
     trusted();
     const root = await pickProject(argument);
     if (!root) return false;
-    const chosen = await vscode.window.showOpenDialog({ canSelectFolders: kind === 'cubeIDE', canSelectFiles: true, canSelectMany: false,
-      title: kind === 'cubeIDE' ? 'Select CubeIDE installation, .app or plugins directory' : 'Select GNU Make (Windows: MSYS2 make.exe)', openLabel: 'Use Selected Path' });
-    if (!chosen?.[0]) return false;
-    choices.set(root, { ...choices.get(root), [kind]: chosen[0].fsPath });
-    await refresh();
-    return true;
+    const label = kind === 'cubeIDE' ? 'STM32CubeIDE' : 'GNU Make';
+    for (;;) {
+      const chosen = await vscode.window.showOpenDialog({
+        canSelectFolders: kind === 'cubeIDE', canSelectFiles: kind === 'make', canSelectMany: false,
+        title: kind === 'cubeIDE' ? 'Select CubeIDE installation, .app or plugins directory' : 'Select GNU Make (Windows: native make.exe from CubeIDE)',
+        openLabel: 'Use Selected Path'
+      });
+      if (!chosen?.[0]) return false;
+      const selectedPath = chosen[0].fsPath;
+      output.appendLine(`Checking ${label} selection: ${selectedPath}`);
+      const report = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Dauhuniec: checking ${label} at ${selectedPath}` },
+        () => inspect(binary, root, { ...options(root), [kind]: selectedPath }));
+      const failures = report.checks.filter(check => check.status === 'error'
+        && check.action === (kind === 'cubeIDE' ? 'selectCubeIDE' : 'selectMake'));
+      if (failures.length) {
+        const details = failures.map(check => check.message).join('\n');
+        output.appendLine(`${label} selection rejected:\n${details}`);
+        const action = await vscode.window.showErrorMessage(
+          `${label} tools were not found or are incomplete at "${selectedPath}". ${failures[0].message}`,
+          'Select Another Path', 'Show Log', 'Official Downloads');
+        if (action === 'Select Another Path') continue;
+        if (action === 'Show Log') output.show();
+        if (action === 'Official Downloads') await installTools();
+        return false;
+      }
+      await vscode.workspace.getConfiguration('dauhuniec', vscode.Uri.file(root)).update(
+        kind === 'cubeIDE' ? 'cubeIDEPath' : 'makePath', selectedPath, vscode.ConfigurationTarget.WorkspaceFolder);
+      choices.set(root, { ...choices.get(root), [kind]: selectedPath });
+      await refresh();
+      output.appendLine(`${label} path saved: ${selectedPath}`);
+      void vscode.window.showInformationMessage(`${label} tools found. Saved path: ${selectedPath}`);
+      return true;
+    }
   }
 
   async function configure(argument?: unknown): Promise<void> {
@@ -219,11 +258,20 @@ export async function activate(context: vscode.ExtensionContext) {
       if (!report.checks.some(check => check.status === 'error')) break;
       const action = await vscode.window.showQuickPick([
         { label: 'Select CubeIDE installation', detail: 'ARM GCC, GDB, ST-LINK server and CubeProgrammer', action: 'cubeIDE' },
-        { label: 'Select GNU Make', detail: 'Windows: use MSYS2 make.exe', action: 'make' },
+        { label: 'Select GNU Make', detail: 'Windows: use native make.exe from CubeIDE', action: 'make' },
+        { label: 'Download STM32CubeIDE', detail: 'Open the official ST download page', action: 'downloadCubeIDE' },
+        ...(process.platform === 'win32' ? [
+          { label: 'Windows Setup Instructions', detail: 'Use CubeIDE tools without additional build dependencies', action: 'windowsGuide' },
+        ] : []),
         { label: 'Installation guide', detail: 'How to install the required tools', action: 'guide' },
         { label: 'Check again', detail: 'Refresh after installing tools', action: 'refresh' }
       ], { title: 'Dauhuniec · Resolve missing tools', placeHolder: report.checks.find(check => check.status === 'error')?.message });
       if (!action) return;
+      if (action.action === 'windowsGuide') { await windowsGuide(); return; }
+      if (action.action === 'downloadCubeIDE') {
+        await openDownload('cubeIDE');
+        return;
+      }
       if (action.action === 'guide') { await guide(); return; }
       if (action.action === 'cubeIDE' || action.action === 'make') { if (!await chooseTool(action.action, root)) return; }
     }
@@ -346,8 +394,9 @@ export async function activate(context: vscode.ExtensionContext) {
     const resource = ioc ?? (root ? vscode.Uri.file(root) : vscode.workspace.workspaceFolders?.[0]?.uri);
     const application = await findCubeMX(vscode.workspace.getConfiguration('dauhuniec', resource).get<string>('cubeMXPath', ''));
     if (!application) {
-      const action = await vscode.window.showErrorMessage('STM32CubeMX is not installed or could not be found on this host. Install STM32CubeMX or set dauhuniec.cubeMXPath to your installation.', 'Open Settings');
-      if (action) await vscode.commands.executeCommand('workbench.action.openSettings', 'dauhuniec.cubeMXPath');
+      const action = await vscode.window.showErrorMessage('STM32CubeMX is not installed or could not be found on this host. Install STM32CubeMX or set dauhuniec.cubeMXPath to your installation.', 'Download STM32CubeMX', 'Open Settings');
+      if (action === 'Download STM32CubeMX') await openDownload('cubeMX');
+      if (action === 'Open Settings') await vscode.commands.executeCommand('workbench.action.openSettings', 'dauhuniec.cubeMXPath');
       return;
     }
     output.appendLine(`Starting STM32CubeMX: ${application}${ioc ? ` · ${ioc.fsPath}` : ' · new project'}`);
@@ -378,8 +427,31 @@ export async function activate(context: vscode.ExtensionContext) {
     await openDocumentation(context, root, ioc);
   }
 
+  async function openDownload(tool: DownloadTool): Promise<void> {
+    const download = officialDownloads[tool];
+    if (!await vscode.env.openExternal(vscode.Uri.parse(download.url))) {
+      throw new Error(`Could not open ${download.label} download page: ${download.url}`);
+    }
+  }
+
+  async function installTools(): Promise<void> {
+    const items = (Object.keys(officialDownloads) as DownloadTool[])
+      .filter(tool => process.platform === 'win32' || tool !== 'stlink')
+      .map(tool => ({ ...officialDownloads[tool], description: new URL(officialDownloads[tool].url).hostname, tool }));
+    const picked = await vscode.window.showQuickPick(items, {
+      title: 'Dauhuniec · Official tool downloads',
+      placeHolder: 'Open the official website, install the tool, then run Configure Project again',
+      matchOnDetail: true
+    });
+    if (picked) await openDownload(picked.tool);
+  }
+
   async function guide(): Promise<void> {
     await vscode.commands.executeCommand('markdown.showPreview', vscode.Uri.joinPath(context.extensionUri, 'README.md'));
+  }
+
+  async function windowsGuide(): Promise<void> {
+    await vscode.commands.executeCommand('markdown.showPreview', vscode.Uri.joinPath(context.extensionUri, 'docs', 'windows.md'));
   }
 
   async function check(argument?: unknown): Promise<void> {
@@ -461,6 +533,8 @@ export async function activate(context: vscode.ExtensionContext) {
   register('flash', root => commandTask('flash', root)); register('clean', root => commandTask('clean', root));
   register('probes', root => commandTask('list-probes', root)); register('debug', debug);
   register('documentation', documentation);
+  register('installTools', installTools);
+  register('windowsGuide', windowsGuide);
   register('openIOC', openIOC); register('guide', guide); register('logs', () => output.show());
   register('chooseIDE', root => chooseTool('cubeIDE', root)); register('chooseMake', root => chooseTool('make', root));
   const watcher = vscode.workspace.createFileSystemWatcher('**/{*.ioc,Makefile,tools.json}');

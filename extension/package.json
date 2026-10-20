@@ -3,7 +3,7 @@
   "displayName": "Dauhuniec",
   "icon": "media/icon.png",
   "description": "Dauhuniec: build, flash and debug STM32 CubeMX projects in VS Code with the lon CLI.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "dauhuniec",
   "license": "MIT",
   "repository": {
@@ -67,6 +67,18 @@
   },
   "contributes": {
     "commands": [
+      {
+        "command": "dauhuniec.windowsGuide",
+        "title": "Windows Setup Instructions",
+        "category": "Dauhuniec",
+        "icon": "$(book)"
+      },
+      {
+        "command": "dauhuniec.installTools",
+        "title": "Install Tools / Official Downloads",
+        "category": "Dauhuniec",
+        "icon": "$(cloud-download)"
+      },
       {
         "command": "dauhuniec.configure",
         "title": "Configure CubeMX Project",
@@ -352,7 +364,7 @@
           "type": "string",
           "default": "",
           "scope": "resource",
-          "description": "Optional GNU Make executable. Windows requires MSYS2 Make and shell."
+          "description": "Optional GNU Make executable. Windows automatically uses native Make from CubeIDE."
         },
         "dauhuniec.runner": {
           "type": "string",
@@ -393,11 +405,6 @@
           "type": "string",
           "scope": "resource",
           "description": "Detected GNU Make executable, managed by setup."
-        },
-        "dauhuniec.shell": {
-          "type": "string",
-          "scope": "resource",
-          "description": "Detected MSYS2 shell, managed by setup."
         },
         "dauhuniec.server": {
           "type": "string",

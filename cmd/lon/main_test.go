@@ -68,7 +68,7 @@ func TestCleanCannotRemoveRootSourcesOrTraverseLinks(t *testing.T) {
 
 func TestFlashStopsAfterFailedBuild(t *testing.T) {
 	count := 0
-	err := perform(t.TempDir(), "flash", config{Tools: map[string]string{"make": "make"}},
+	err := perform(t.TempDir(), "flash", config{Project: project{BuildDir: "build"}, Tools: map[string]string{"make": "make"}},
 		func(_ string, cmd, _ []string) error {
 			count++
 			if cmd[0] != "make" {

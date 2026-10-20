@@ -15,8 +15,11 @@ concurrency:
 
 jobs:
   cli:
-    name: Test CLI
-    runs-on: ubuntu-latest
+    name: Test CLI (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -27,6 +30,12 @@ jobs:
       - uses: ./.github/actions/setup-go
         with:
           scope: cli
+
+      # Native Make is a test dependency here; end users use CubeIDE's copy.
+      - name: Install native Make for Windows integration tests
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install make --yes --no-progress
 
       - name: Test Go CLI
         run: go test ./...
@@ -64,10 +73,28 @@ jobs:
         working-directory: extension
         run: pnpm test
 
+  windows-cubemx:
+    name: Test CubeMX launch on Windows
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-extension
+
+      - name: Test Windows executable launch and paths
+        working-directory: extension
+        run: |
+          pnpm run compile
+          node --test dist/test/cubeMX.test.js
+
   checks:
     name: PR checks
     if: always()
-    needs: [cli, tests]
+    needs: [cli, tests, windows-cubemx]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -75,7 +102,9 @@ jobs:
         env:
           CLI_RESULT: ${{ needs.cli.result }}
           TESTS_RESULT: ${{ needs.tests.result }}
+          WINDOWS_RESULT: ${{ needs.windows-cubemx.result }}
         run: |
           echo "CLI: $CLI_RESULT"
           echo "Extension tests: $TESTS_RESULT"
-          [[ "$CLI_RESULT" == success && "$TESTS_RESULT" == success ]]
+          echo "Windows CubeMX tests: $WINDOWS_RESULT"
+          [[ "$CLI_RESULT" == success && "$TESTS_RESULT" == success && "$WINDOWS_RESULT" == success ]]

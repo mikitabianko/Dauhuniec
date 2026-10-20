@@ -20,7 +20,7 @@ import (
 
 var assets = dauhuniec.Assets
 
-const version = "0.1.1"
+const version = "0.1.2"
 const stateDir = ".dauhuniec"
 const previousStateDir = ".lon"
 const legacyStateDir = ".stm32-codeready"
@@ -551,8 +551,8 @@ func loadConfig(root string) (config, error) {
 			return cfg, fmt.Errorf("tool %s missing; run setup again", key)
 		}
 	}
-	if runtime.GOOS == "windows" && !regularFile(cfg.Tools["shell"]) {
-		return cfg, errors.New("MSYS2 shell missing; run setup again")
+	if runtime.GOOS == "windows" && cfg.Tools["shell"] != "" {
+		return cfg, errors.New("legacy shell configuration; run setup again to use native CubeIDE Make")
 	}
 	p, err := readProject(root)
 	if err != nil {
@@ -572,23 +572,6 @@ func run(root string, command []string, environment []string) error {
 	cmd.Dir, cmd.Env = root, environment
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return cmd.Run()
-}
-
-func build(root string, cfg config, execute runner) error {
-	path := strings.Join([]string{filepath.Dir(cfg.Tools["gcc"]), filepath.Dir(cfg.Tools["make"]), os.Getenv("PATH")}, string(os.PathListSeparator))
-	var environment []string
-	for _, variable := range os.Environ() {
-		key, _, _ := strings.Cut(variable, "=")
-		if !strings.EqualFold(key, "PATH") {
-			environment = append(environment, variable)
-		}
-	}
-	environment = append(environment, "PATH="+path)
-	command := []string{cfg.Tools["make"], "-j2", "GCC_PATH=", "PREFIX=arm-none-eabi-", "DEBUG=1", "OPT=-Og", "all"}
-	if runtime.GOOS == "windows" {
-		command = append(command, "SHELL=sh.exe")
-	}
-	return execute(root, command, environment)
 }
 
 func elfPath(root string, p project) string { return filepath.Join(root, p.BuildDir, p.Target+".elf") }

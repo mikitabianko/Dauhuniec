@@ -125,15 +125,30 @@ are checked; physical communication still needs verification on each target OS.
 
 ## Required tools
 
-- **STM32CubeIDE**, including GNU Tools for STM32, GDB, ST-LINK GDB server and
+On Windows, Make is included in STM32CubeIDE and detected automatically.
+No MSYS2 or additional build environment is required. Open
+**Resources → Windows Setup Instructions** for the [Windows setup guide](docs/windows.md).
+
+Open **Resources → Install Tools / Official Downloads** in the Dauhuniec sidebar
+or run **Dauhuniec: Install Tools / Official Downloads** from the Command Palette.
+The menu opens official download pages in your browser and is available without
+an open project. Missing-tool setup also offers a CubeIDE download
+link; the missing-CubeMX notification offers its download page. After installing,
+run **Configure Project** again and select the installation if needed.
+Selecting a CubeIDE directory or Make executable checks its required tool files
+before saving the path in the project's VS Code settings. Invalid selections show
+the selected path and the discovery error, with options to retry or view the log.
+
+- **[STM32CubeMX](https://www.st.com/en/development-tools/stm32cubemx.html)**
+  to create and generate the Makefile project.
+- **[STM32CubeIDE](https://www.st.com/en/development-tools/stm32cubeide.html)**, including GNU Tools for STM32, GDB, ST-LINK GDB server and
   STM32CubeProgrammer. You can use the tools without opening the project in CubeIDE.
-- **GNU Make**. On Windows, install MSYS2 in `C:\msys64`, then run
-  `pacman -S --needed make` in MSYS2. Use its `usr\bin\make.exe`, together with
-  `sh.exe`. On macOS install Command Line Tools with `xcode-select --install`.
+- **GNU Make**. On Windows, the native Make bundled with CubeIDE is detected
+  automatically. On macOS install Command Line Tools with `xcode-select --install`.
   On Debian/Ubuntu install `make` with your package manager.
 - **C/C++** and **Cortex-Debug** extensions, included as recommended companion
   extensions. They can also be installed manually from Extensions.
-- Windows: ST-LINK USB driver from ST. Linux: ST-LINK udev rules supplied with
+- Windows: [ST-LINK USB driver from ST (STSW-LINK009)](https://www.st.com/en/development-tools/stsw-link009.html). Linux: ST-LINK udev rules supplied with
   CubeIDE. Use the correct CubeIDE/toolchain architecture for your machine.
 
 The extension runs in the workspace extension host. With SSH, WSL or a container,
@@ -169,11 +184,16 @@ when you invoke those actions; opening a project or checking tools does not flas
   sidebar title, `.ioc` editor title and Explorer context menu. Multiple matching
   `.ioc` files show a picker.
 - CubeMX is detected in standard Windows, macOS and Linux installation locations
-  and `PATH`, including versioned macOS application bundles. For a custom location,
+  and `PATH`, including Windows per-user installs under
+  `%LOCALAPPDATA%\Programs\STM32CubeMX` and versioned macOS application bundles. For a custom location,
   set `dauhuniec.cubeMXPath` to its executable, installation directory or macOS
   `.app`. If CubeMX is missing, the extension shows an installation/path message.
   In SSH/WSL/containers, CubeMX must be installed on the workspace host and have
   access to a graphical session.
+  On Windows, quoted paths copied from Explorer and environment variables such as
+  `%LOCALAPPDATA%\Programs\STM32CubeMX` are accepted in `dauhuniec.cubeMXPath`.
+  Immediate launcher failures are reported with the exit code; later GUI or Java
+  failures may still require launching CubeMX directly to see its own error dialog.
 
 If ST-LINK is missing, check the data-capable USB cable, board connector,
 driver/udev rules and other running debuggers. With multiple boards, check **Target Board**.
