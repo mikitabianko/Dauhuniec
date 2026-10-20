@@ -4,19 +4,37 @@ async function planRelease({ version, repository, sha, token, apiUrl }, request 
   if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
     throw new Error(`Invalid extension version: ${version}`);
   }
-  const response = await request(`${apiUrl}/repos/${repository}/commits/v${version}`, {
-    signal: AbortSignal.timeout(30_000),
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-    },
-  });
-  if (response.status === 404) return { version, publish: true };
-  if (!response.ok) throw new Error(`Cannot check release tag: HTTP ${response.status}`);
-  const commit = await response.json();
-  if (!/^[0-9a-f]{40}$/.test(commit.sha)) throw new Error('Invalid release tag commit');
-  return { version, publish: commit.sha === sha };
+  const baseUrl = `${apiUrl}/repos/${repository}`;
+  async function readObject(path, allowMissing = false) {
+    const response = await request(`${baseUrl}${path}`, {
+      signal: AbortSignal.timeout(30_000),
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    });
+    if (allowMissing && response.status === 404) return null;
+    if (!response.ok) throw new Error(`Cannot check release tag: HTTP ${response.status}`);
+    const data = await response.json();
+    const object = data?.object;
+    if (!object || !/^[0-9a-f]{40}$/.test(object.sha) || !['commit', 'tag'].includes(object.type)) {
+      throw new Error('Invalid release tag commit');
+    }
+    return object;
+  }
+
+  // Query the exact tag ref: the commit endpoint can return 422 for an
+  // unknown revision. Only a missing ref permits a new release.
+  let object = await readObject(`/git/ref/tags/v${version}`, true);
+  if (!object) return { version, publish: true };
+  const visited = new Set();
+  while (object.type === 'tag') {
+    if (visited.has(object.sha) || visited.size >= 16) throw new Error('Invalid release tag chain');
+    visited.add(object.sha);
+    object = await readObject(`/git/tags/${object.sha}`);
+  }
+  return { version, publish: object.sha === sha };
 }
 
 async function main() {

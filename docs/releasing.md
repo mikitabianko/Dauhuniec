@@ -4,6 +4,8 @@
 
 [PR checks](../.github/workflows/build-extension.yml) validate pull requests into
 `master`, testing the PR merge commit. New commits cancel outdated PR checks.
+Go and extension tests run on Linux, Windows and macOS. Every PR also builds
+all six CLI binaries, packages the universal VSIX and verifies its contents.
 Configure branch protection for `master` to require **PR checks**; release jobs
 should not be required checks because they do not run on open PRs.
 
@@ -11,6 +13,8 @@ should not be required checks because they do not run on open PRs.
 `master`, including direct pushes. Validation runs alongside version planning
 and packaging. Publication requires successful validation and packaging of the
 same commit. Release runs are serialized to prevent overlapping publication.
+The concurrency queue retains up to 100 pending runs instead of replacing the
+previous pending run when another commit arrives.
 Pushing a tag alone does not trigger a release.
 
 The version in `extension/package.json` determines the `v<version>` tag:
@@ -18,12 +22,16 @@ The version in `extension/package.json` determines the `v<version>` tag:
 - A missing tag allows a new build and release.
 - A tag pointing to another commit skips packaging and publication; validation
   still runs. Bump the version to release new changes.
-- A tag on the current commit permits retries. GitHub Release assets may be
-  replaced; the publication script rejects replacements from another commit.
+- A tag on the current commit permits retries. If a GitHub Release already
+  exists, its original installer and checksum are downloaded and verified,
+  then reused for Marketplace publication. Published assets are never replaced.
+  Missing or corrupt assets fail the retry; a release on another commit is rejected.
   Marketplace publication skips versions that are already published.
 
 Releases contain the universal VSIX with all six CLI binaries and `SHA256SUMS`.
 The same installer and checksum are retained as workflow artifacts for 30 days.
+The `-vsix` artifact contains the current build; the `-published` artifact contains
+the installer actually published to GitHub and is the only input to Marketplace.
 Only the GitHub Release job receives `contents: write`; repository or organization
 policy must allow GitHub Actions to create releases.
 
@@ -31,6 +39,7 @@ Job dependencies and permissions are defined in the workflows linked above.
 Shared setup lives in [setup-go](../.github/actions/setup-go/action.yml) and
 [setup-extension](../.github/actions/setup-extension/action.yml). Go module
 caches are shared; compiler caches are scoped by job and refreshed per commit.
+PR and release packaging share [package-extension](../.github/actions/package-extension/action.yml).
 
 ## Release scripts
 
