@@ -61,28 +61,7 @@ jobs:
           ref: ${{ github.event.action == 'closed' && github.event.pull_request.merge_commit_sha || github.ref }}
           persist-credentials: false
 
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-
-      - uses: pnpm/action-setup@v6
-        with:
-          package_json_file: extension/package.json
-          cache: true
-          cache_dependency_path: extension/pnpm-lock.yaml
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: native-cli
-
-      - name: Restore and verify CLI binaries
-        run: |
-          tar -xf cli-bundle.tar
-          sha256sum --check SHA256SUMS
-
-      - name: Install extension dependencies
-        working-directory: extension
-        run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup-extension
 
       - name: Test extension
         working-directory: extension
@@ -118,24 +97,7 @@ jobs:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
           persist-credentials: false
 
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-
-      - uses: pnpm/action-setup@v6
-        with:
-          package_json_file: extension/package.json
-          cache: true
-          cache_dependency_path: extension/pnpm-lock.yaml
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: native-cli
-
-      - name: Restore and verify CLI binaries
-        run: |
-          tar -xf cli-bundle.tar
-          sha256sum --check SHA256SUMS
+      - uses: ./.github/actions/setup-extension
 
       - name: Read package version
         id: version
@@ -143,28 +105,12 @@ jobs:
           version=$(node -p "require('./extension/package.json').version")
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Install extension dependencies
-        working-directory: extension
-        run: pnpm install --frozen-lockfile
-
       - name: Package extension
         working-directory: extension
         run: pnpm run package
 
       - name: Verify bundled resources
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          from zipfile import ZipFile
-
-          packages = list(Path('releases').glob('*.vsix'))
-          assert len(packages) == 1, f'Expected one VSIX, got {packages}'
-          with ZipFile(packages[0]) as package:
-              for source in Path('bin').iterdir():
-                  assert package.read(f'extension/bin/{source.name}') == source.read_bytes()
-              for name in ['dist/extension.js', 'LICENSE.txt', 'GO-LICENSE.txt', 'THIRD-PARTY-NOTICES.txt']:
-                  assert package.getinfo(f'extension/{name}').file_size > 0, name
-          PY
+        run: python3 scripts/ci/verify-vsix.py
 
       - name: Compute installer checksum
         working-directory: releases
@@ -187,6 +133,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          persist-credentials: false
+
       - uses: actions/download-artifact@v8
         with:
           name: dauhuniec-${{ needs.build.outputs.version }}-vsix
@@ -198,12 +149,4 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: v${{ needs.build.outputs.version }}
           RELEASE_COMMIT: ${{ github.event.pull_request.merge_commit_sha }}
-        run: |
-          cd releases
-          sha256sum --check SHA256SUMS
-          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" ./*.vsix SHA256SUMS --clobber
-          else
-            gh release create "$RELEASE_TAG" ./*.vsix SHA256SUMS \
-              --target "$RELEASE_COMMIT" --title "Dauhuniec $RELEASE_TAG" --generate-notes
-          fi
+        run: bash scripts/ci/publish-release.sh

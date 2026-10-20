@@ -76,6 +76,20 @@ The workflow separates CLI validation, extension tests, packaging and publishing
 - `build` packages the universal VSIX only after both jobs succeed, reusing the CLI binaries.
 - `release` publishes the installer after packaging succeeds.
 
+The workflow keeps triggers, job dependencies and permissions in
+`.github/workflows/build-extension.yml`. Shared Node.js/pnpm setup, CLI artifact
+restoration and dependency installation live in the local composite action
+`.github/actions/setup-extension/action.yml`.
+
+Release scripts live in `scripts/ci/`:
+
+- `python3 scripts/ci/verify-vsix.py` checks that the single VSIX in `releases/`
+  contains the original `bin/` executables and required nonempty resources. Run
+  it locally after packaging; it resolves paths relative to the repository.
+- `bash scripts/ci/publish-release.sh` verifies installer checksums and creates
+  or updates a GitHub Release. It requires `GH_TOKEN`, `GH_REPO`, `RELEASE_TAG`
+  and `RELEASE_COMMIT`, and publishes assets from `releases/`.
+
 To block merging when checks fail, configure a branch protection rule or ruleset
 for `master` in GitHub Settings and require the **PR checks** status check. Run
 the workflow on a PR once so GitHub can offer that check for selection. Do not
