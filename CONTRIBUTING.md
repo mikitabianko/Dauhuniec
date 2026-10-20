@@ -83,6 +83,9 @@ The release workflow contains:
 - `build` cross-compiles all six release executables and packages the universal
   VSIX only after both test jobs succeed and the PR is merged.
 - `release` publishes the installer after packaging succeeds.
+- `marketplace` publishes the same verified VSIX to Visual Studio Marketplace
+  after the GitHub Release succeeds, when the repository Actions variable
+  `MARKETPLACE_PUBLISH_ENABLED` is exactly `true`.
 
 Release cross-compilation runs two target builds at a time with
 `go run ./cmd/package -jobs 2`; local packaging defaults to one. Both modes
@@ -132,6 +135,51 @@ Users download the installer from
 [Releases](https://github.com/mikitabianko/Dauhuniec/releases/latest) and select
 **Extensions → … → Install from VSIX…** in VS Code.
 
-No Marketplace token or additional secret is needed. Only the release job receives
-`contents: write` through the built-in `GITHUB_TOKEN`; build jobs have read access.
-Repository or organization policy must allow GitHub Actions to create releases.
+Only the release job receives `contents: write` through the built-in
+`GITHUB_TOKEN`; build jobs have read access. Repository or organization policy
+must allow GitHub Actions to create releases.
+
+### Marketplace setup
+
+Marketplace publishing uses Microsoft Entra workload identity federation (OIDC),
+without a PAT or client secret. Configure it once:
+
+1. Register an Entra application and add a GitHub federated credential for this
+   repository and the `marketplace` environment. Match the subject to the
+   repository's actual OIDC configuration, including owner and repository IDs
+   when immutable subjects are enabled.
+2. Create the GitHub environment `marketplace`, allowing deployments only from
+   the `master` branch. Leave required reviewers and the wait timer disabled
+   for automatic publication.
+3. Add `AZURE_CLIENT_ID` (Application/client ID) and `AZURE_TENANT_ID`
+   (Directory/tenant ID) as environment or repository Actions secrets.
+   Azure login uses `allow-no-subscriptions: true`; no Azure subscription ID
+   is needed for an existing Entra application.
+4. Merge these workflows into `master`. In Actions, manually run **Inspect
+   Marketplace identity** from `master`. It only signs in and reads the profile;
+   it does not build or publish an extension. Copy the profile ID from the run
+   summary. If the profile lookup fails, check whether the service principal
+   needs to be added under Azure DevOps **Organization settings > Users** in an
+   organization connected to the same Entra tenant, then rerun the workflow.
+5. In Marketplace publisher management, add that profile ID under **Members**
+   with the **Contributor** role. The profile ID differs from the Entra client
+   ID and object ID. Confirm the registered publisher matches `publisher` in
+   `extension/package.json`.
+6. Under GitHub **Settings > Secrets and variables > Actions > Variables**, add
+   the **repository** variable `MARKETPLACE_PUBLISH_ENABLED` with value `true`.
+   It must be a repository or organization variable, not an environment variable,
+   because the job condition is evaluated before the environment is entered.
+
+Subsequent merged PRs publish automatically after validation, packaging and the
+GitHub Release. Increase `extension/package.json`'s version and update the
+changelog before each Marketplace release: Marketplace cannot overwrite an
+existing version. A rerun after a successful Marketplace publication will also
+fail on the existing version. To disable Marketplace publication while retaining
+GitHub Releases, remove the variable or set it to `false`.
+
+The Marketplace and identity jobs alone receive `id-token: write`, and only use
+the Entra ID secrets during Azure login. The identity workflow is manual and
+restricted to `master`.
+
+See the [Marketplace publishing documentation](https://code.visualstudio.com/api/working-with-extensions/publishing-extension#secure-automated-publishing-to-visual-studio-marketplace)
+and [Azure Login documentation](https://github.com/Azure/login#login-without-subscription).
