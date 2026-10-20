@@ -116,10 +116,9 @@ for `master` in GitHub Settings and require the **PR checks** status check. Run
 the workflow on a PR once so GitHub can offer that check for selection. Do not
 require release workflow checks, which do not run on open PRs.
 
-The release build archives CLI binaries and their checksums in a tar file to
-preserve executable permissions. The `native-cli` artifact contains this archive
-and is available for download after merging.
-The package filename follows `extension/package.json`. The VSIX and its
+The release build bundles all six CLI binaries inside the VSIX; no separate
+CLI artifact is uploaded. The package filename follows `extension/package.json`.
+The VSIX and its
 SHA-256 checksum are available in the run's **Artifacts** section for 30 days
 (GitHub sign-in required).
 
@@ -155,17 +154,12 @@ without a PAT or client secret. Configure it once:
    (Directory/tenant ID) as environment or repository Actions secrets.
    Azure login uses `allow-no-subscriptions: true`; no Azure subscription ID
    is needed for an existing Entra application.
-4. Merge these workflows into `master`. In Actions, manually run **Inspect
-   Marketplace identity** from `master`. It only signs in and reads the profile;
-   it does not build or publish an extension. Copy the profile ID from the run
-   summary. If the profile lookup fails, check whether the service principal
-   needs to be added under Azure DevOps **Organization settings > Users** in an
-   organization connected to the same Entra tenant, then rerun the workflow.
-5. In Marketplace publisher management, add that profile ID under **Members**
+4. In Marketplace publisher management, add the application's Azure DevOps
+   profile ID under **Members**
    with the **Contributor** role. The profile ID differs from the Entra client
    ID and object ID. Confirm the registered publisher matches `publisher` in
    `extension/package.json`.
-6. Under GitHub **Settings > Secrets and variables > Actions > Variables**, add
+5. Under GitHub **Settings > Secrets and variables > Actions > Variables**, add
    the **repository** variable `MARKETPLACE_PUBLISH_ENABLED` with value `true`.
    It must be a repository or organization variable, not an environment variable,
    because the job condition is evaluated before the environment is entered.
@@ -177,9 +171,9 @@ existing version. A rerun after a successful Marketplace publication will also
 fail on the existing version. To disable Marketplace publication while retaining
 GitHub Releases, remove the variable or set it to `false`.
 
-The Marketplace and identity jobs alone receive `id-token: write`, and only use
-the Entra ID secrets during Azure login. The identity workflow is manual and
-restricted to `master`.
+Only the Marketplace job receives `id-token: write`, and it only uses the Entra
+ID secrets during Azure login. The one-time identity inspection workflow has
+been removed after setup; profile IDs are no longer printed by CI.
 
 See the [Marketplace publishing documentation](https://code.visualstudio.com/api/working-with-extensions/publishing-extension#secure-automated-publishing-to-visual-studio-marketplace)
 and [Azure Login documentation](https://github.com/Azure/login#login-without-subscription).
