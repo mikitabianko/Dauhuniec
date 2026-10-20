@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: checks-${{ github.workflow }}-${{ github.event.action == 'closed' && 'master' || github.ref }}
-  cancel-in-progress: ${{ github.event.action != 'closed' }}
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   cli:
@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.action == 'closed' && github.event.pull_request.merge_commit_sha || github.ref }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - uses: actions/setup-go@v7
@@ -42,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.action == 'closed' && github.event.pull_request.merge_commit_sha || github.ref }}
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - uses: ./.github/actions/setup-extension
