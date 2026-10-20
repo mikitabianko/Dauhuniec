@@ -49,10 +49,16 @@ USB-to-serial driver. Packaged extension users do not need Go, Node.js or Python
 **VS Code Marketplace publication is planned.** Until the extension is published,
 install a VSIX package or build one from source.
 
-Check [GitHub Releases](https://github.com/mikitabianko/Dauhuniec/releases) for
-published `.vsix` assets. If a package is available, download it and use
-**Extensions → … → Install from VSIX…** in VS Code. If no package is published,
-use the source build below.
+Download the `.vsix` installer from the latest
+[GitHub Release](https://github.com/mikitabianko/Dauhuniec/releases/latest), then
+use **Extensions → … → Install from VSIX…** in VS Code. One installer includes
+the CLI for Windows, macOS and Linux on x64 and ARM64.
+
+For development builds, open [Build extension in GitHub Actions](https://github.com/mikitabianko/Dauhuniec/actions/workflows/build-extension.yml),
+select a successful run and download `dauhuniec-<version>-vsix` under **Artifacts**.
+Sign in to GitHub to download the artifact, then unzip it to get the `.vsix` and
+its `SHA256SUMS` file. Build artifacts are retained for 30 days; tagged releases
+provide lasting downloads. If no build has run yet, use the source build below.
 
 <details>
 <summary>Build the extension from source</summary>
