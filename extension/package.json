@@ -3,7 +3,7 @@
   "displayName": "Dauhuniec",
   "icon": "media/icon.png",
   "description": "Dauhuniec: build, flash and debug STM32 CubeMX projects in VS Code with the lon CLI.",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "dauhuniec",
   "license": "MIT",
   "repository": {
