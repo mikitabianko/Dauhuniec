@@ -27,7 +27,7 @@ binaries, JavaScript, dependencies, release packages, logs and local settings
 must stay out of source control.
 
 Tests requiring the real VS Code API are described in the extension's
-[host test instructions](extension/README.md#editor-title-buttons).
+[host test instructions](docs/guide.md#extension-host-checks).
 Some require a configured firmware workspace or desktop session. Unit tests do
 not verify flashing or debugging on physical boards.
 
@@ -46,6 +46,30 @@ license notices. Install it using **Extensions → … → Install from VSIX…*
 
 Run `python3 scripts/clean.py` to remove generated output; add `--dependencies`
 to also remove `extension/node_modules/`.
+
+## README screenshots
+
+Images live in `extension/media/screenshots/`, so the same assets can be used by
+GitHub and the packaged extension README. Capture the real VS Code interface in
+an isolated profile with a separate extensions directory and a temporary copy of
+a CubeMX project. Load Dauhuniec with `--extensionDevelopmentPath` or install it
+in that profile. Keep the user's regular profile and original project sources untouched.
+
+The macOS screenshots show a CubeMX-generated Blink project for NUCLEO-F411RE:
+a successful native build, a full-file/USER CODE comparison, documentation, target selection with
+NUCLEO-H723ZG also connected, and a physical Cortex-Debug breakpoint. Blink toggles
+LD2 every 500 ms; Watch shows `blink_count`. The Serial Monitor example adds
+USART2 output at 115200 baud through the F411RE ST-LINK virtual serial port.
+Its messages come from the physical board; the port name is hidden. The F411RE firmware upload was verified
+with CubeProgrammer. The H723ZG was used for probe discovery only.
+
+Before saving a screenshot, hide terminal sticky scroll if it exposes the task's
+absolute command path. Check the entire frame for usernames, home directories,
+workspace paths, machine names, connected port names, probe serials and account
+information. Use a neutral demo project. For hardware captures, use an approved
+board and pin its ST-LINK serial explicitly. Hide serial values in the screenshot
+window without changing the target selection, and state that they are hidden.
+Inspect both the rendered image and its OCR text before adding it to a README.
 
 ## Pull requests and releases
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3
+
+- Rework the READMEs around Marketplace installation, quick start and everyday workflows; update Windows testing status.
+- Add screenshots of building, physical NUCLEO-F411RE debugging, target selection, USER CODE folding, serial monitoring and documentation, with personal paths and device identifiers hidden.
+
 ## 0.1.2
 
 - Simplify Make discovery and extract build environment preparation and legacy settings migration without changing behavior.

@@ -6,7 +6,7 @@
 
 ## Upgrading from previous versions
 
-Disable the old extension, install the new VSIX, and run
+Disable the old extension, install Dauhuniec from the Marketplace, and run
 **Dauhuniec: Configure CubeMX Project** once for each existing project.
 Configuration reuses the existing tool paths, migrates local `lon.*` and
 `codeready.*` settings to `dauhuniec.*`, replaces generated tasks, and preserves
@@ -27,8 +27,8 @@ CLIs are supplied for Windows, macOS, and Linux on x86_64 and ARM64.
 2. Under **Project Manager → Project → Toolchain / IDE**, select **Makefile**.
    Generate code in the project root, which should contain one `.ioc` file and a `Makefile`.
 3. Install the tools listed below.
-4. In VS Code, select **Extensions → … → Install from VSIX…** and install
-   `releases/dauhuniec-0.1.2.vsix`.
+4. Install [Dauhuniec from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=dauhuniec.dauhuniec),
+   or search for **Dauhuniec** in VS Code's Extensions view.
 5. Open your project folder and select **Dauhuniec → Configure project**.
    The extension also offers configuration when it first detects a project.
 6. If tools are not found, select the CubeIDE directory or GNU Make executable.
@@ -206,9 +206,10 @@ Local validation is performed on Intel macOS with ARM GCC 14.3.1 from CubeIDE 2.
 Go/TypeScript tests, an independent project copy in a path containing spaces,
 preservation of user settings, and firmware builds. A separate VS Code Extension
 Host checks extension activation and a real build task from the editor.
-Other operating systems and architectures receive cross-compiled binaries;
-physical boards and flashing/debugging sessions require validation on the
-corresponding hardware.
+Windows has also been tested. Linux receives native binaries but still needs
+runtime and hardware verification. Binaries are supplied for x64 and ARM64 on
+each platform; testing does not cover every OS, architecture, board and probe
+combination.
 
 ## Select a board for flashing
 
@@ -266,8 +267,8 @@ serial utilities are not needed. A device driver and access to the port are
 required. In SSH/WSL/containers, the USB port must be accessible on the workspace
 host. Hiding the terminal does not interrupt the session; exit with /quit or
 Ctrl+C to release the port. Whether the terminal survives a window reload depends
-on VS Code settings. Physical communication on each operating system must be
-tested on the corresponding hardware.
+on VS Code settings. Serial communication depends on the device, driver and
+port permissions on the workspace host.
 
 ## Development
 
@@ -287,7 +288,7 @@ pnpm run package
 ```
 
 Output: six CLIs in `bin/`, `SHA256SUMS`, and the installable
-`releases/dauhuniec-0.1.2.vsix`. No separate ZIP is created. Binaries,
+`releases/dauhuniec-0.1.3.vsix`. No separate ZIP is created. Binaries,
 dependencies, compiled files, and VSIX packages are excluded from Git.
 
 Extension sources are in `extension/src`; native logic is in the Go files under
@@ -295,29 +296,35 @@ Extension sources are in `extension/src`; native logic is in the Go files under
 in a separate VS Code Extension Host. From `extension`, run
 `pnpm run test:host /path/to/configured/CubeMX/project`. It opens an isolated
 VS Code profile, builds the project, and does not access the board.
-The Go runtime license is in `GO-LICENSE.txt`. Before publishing to the
-Marketplace, register your publisher and set it in `extension/package.json`;
-the current identifier is for local packaging.
+The Go runtime license is in `GO-LICENSE.txt`. See
+[release administration](releasing.md) for Marketplace publication configuration.
 
-### Quick actions panel
+### Extension Host checks
 
-The bottom-left area shows the selected CubeMX project and **Build**, **Flash**,
-**Debug**, and **⋯** buttons. Clicking the project name switches the active
-project. Until configuration is complete, a **Configure** button replaces build
-actions. While a task is running, a progress indicator and stop button are shown;
-after an error, a shortcut to **Problems** appears.
+From `extension`, run these checks in an empty temporary workspace:
 
-The **⋯** menu provides build cleanup, environment checks, the ST-LINK list,
-`.ioc`, logs, the terminal, Problems, settings, and the guide. Build output stays
-in the task terminal. The **USER CODE** toggle is on the right.
+```sh
+pnpm run test:host /path/to/empty/workspace --cubemx
+pnpm run test:host /path/to/empty/workspace --serial
+pnpm run test:host /path/to/empty/workspace --targets
+```
 
-The top-right corner of the editor for C/C++ files with CubeMX markers provides
-two buttons: **Focus on USER CODE / Show Full File** (toggle) and
-**Go to USER CODE Block** (user block picker). Hover over a button to see its action.
+CubeMX and target-selection checks use fake executables/probes on macOS/Linux.
+The serial check verifies terminal integration. These checks do not verify
+communication with physical hardware.
 
-USER CODE mode preserves function signatures, including multiline signatures,
-and their opening and closing braces so you can see which function contains
-each user block.
+### Editor and status bar actions
+
+The status bar provides Home, CubeMX, Build, Flash (existing ELF), Build and Flash,
+Debug and Serial Monitor shortcuts. Hover over each icon to see its action.
+During a task, Home shows progress and Stop is available for cancellable tasks.
+Build output stays in the task terminal; compiler diagnostics appear in Problems.
+Project selection and configuration are available in the Dauhuniec sidebar.
+
+C/C++ files with CubeMX markers show **Focus on USER CODE / Show Full File** and
+**Go to USER CODE Block** in the editor title. A USER CODE toggle is also available
+on the right of the status bar. Focus preserves function signatures, including
+multiline parameters, and braces around editable blocks.
 
 ## MCU, board, HAL, and RTOS documentation
 

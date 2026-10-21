@@ -2,125 +2,157 @@
 
 <img src="assets/logo.png" alt="Dauhuniec flax flower" width="160">
 
-**Keep CubeMX for code generation. Use VS Code for development.**
+**Build, flash and debug STM32CubeMX projects in VS Code.**
 
-Dauhuniec takes an STM32CubeMX **Makefile** project into VS Code with tool
-detection, build tasks, ST-LINK flashing and Cortex-Debug integration.
-Its native CLI, **`lon`**, is bundled with the extension and can also run independently.
+Keep CubeMX for pins, clocks and code generation. Use Dauhuniec for everyday
+firmware development in VS Code: tool detection, builds, ST-LINK flashing,
+Cortex-Debug integration and a serial monitor.
 
-[Prerequisites](#prerequisites) · [Installation](#installation) ·
-[Quick start](#quick-start) · [CLI](#cli) · [Help](#help)
+[Install from Marketplace](https://marketplace.visualstudio.com/items?itemName=dauhuniec.dauhuniec) ·
+[Quick start](#quick-start) · [User guide](docs/guide.md) ·
+[Changelog](extension/CHANGELOG.md) ·
+[Report an issue](https://github.com/mikitabianko/Dauhuniec/issues)
+
+![Dauhuniec sidebar, USER CODE focus and a successful Blink firmware build](extension/media/screenshots/build.png)
 
 ## Features
 
+- **Configure your project** with automatic discovery of CubeIDE tools and ready-to-use build, debug and IntelliSense settings.
 - **Build, flash and debug** from the sidebar, status bar or Command Palette.
-- **Select an ST-LINK target** by serial number when working with multiple boards.
-- **Focus on USER CODE** by folding CubeMX-generated sections without changing files.
-- **Use the serial console** with UTF-8/HEX display, configurable line endings and optional RX/TX logging.
-- **Find documentation** for your MCU, board, HAL/LL and RTOS; download official PDF manuals for offline reuse or open local documents.
-
-## Prerequisites
-
-For the build, flash and debug workflow, install:
-
-| Requirement | Purpose |
-| --- | --- |
-| **VS Code 1.95 or later** | Runs the Dauhuniec extension. |
-| **STM32CubeMX** | Generates a project with **Toolchain / IDE → Makefile**. |
-| **STM32CubeIDE** | Supplies ARM GCC, GDB, ST-LINK GDB server and STM32CubeProgrammer. You can use these tools without opening your project in CubeIDE. |
-| **GNU Make** | Builds the generated Makefile project. See platform notes below. |
-| **C/C++** (`ms-vscode.cpptools`) and **Cortex-Debug** (`marus25.cortex-debug`) extensions | Provide C/C++ language support and debugging. They are declared as companion extensions; install them manually if missing. |
-| **STM32 board and ST-LINK probe** | Required for flashing and debugging. An onboard ST-LINK is sufficient; use a data-capable USB cable. |
-
-Platform setup:
-
-- **Windows:** Make is detected automatically inside STM32CubeIDE. No separate
-  build environment or shell installation is needed. Install ST's ST-LINK USB driver.
-- **macOS:** install Command Line Tools with `xcode-select --install` to provide Make.
-- **Linux:** install `make` through your package manager and the ST-LINK udev rules
-  supplied with CubeIDE. Ensure your user has access to the USB device.
-
-The serial console additionally needs an accessible serial port and any required
-USB-to-serial driver. Packaged extension users do not need Go, Node.js or Python.
+- **Choose your target** by ST-LINK serial number when several boards are connected.
+- **Focus on USER CODE** by folding generated sections while keeping function context visible.
+- **Monitor serial data** in the terminal with UTF-8/HEX display, configurable line endings and optional RX/TX logging.
+- **Find MCU, board, HAL/LL and RTOS documentation**, cache official PDF manuals for offline reading and open local schematics.
+- **Use the bundled `lon` CLI** for setup, builds, flashing and serial communication outside VS Code.
 
 ## Installation
 
-**VS Code Marketplace publication is planned.** Until the extension is published,
-install a VSIX package or build one from source.
-
-Download the `.vsix` installer from the latest
-[GitHub Release](https://github.com/mikitabianko/Dauhuniec/releases/latest), then
-use **Extensions → … → Install from VSIX…** in VS Code. One installer includes
-the CLI for Windows, macOS and Linux on x64 and ARM64.
-
-Pull requests targeting `master` show CLI and extension test results under **Checks**.
-Installer builds and releases run automatically after those pull requests are merged.
-To download a build artifact, open [Release extension in GitHub Actions](https://github.com/mikitabianko/Dauhuniec/actions/workflows/release-extension.yml),
-select a successful run and download `dauhuniec-<version>-vsix` under **Artifacts**.
-Sign in to GitHub to download the artifact, then unzip it to get the `.vsix` and
-its `SHA256SUMS` file. Build artifacts are retained for 30 days; tagged releases
-provide lasting downloads. If no build has run yet, use the source build below.
-
-<details>
-<summary>Build the extension from source</summary>
-
-You need **Git**, **Go 1.22 or later**, and **Node.js 20 or later with pnpm 10**.
-These are build-time requirements for Dauhuniec itself, in addition to the tools
-needed for firmware development.
+Install **[Dauhuniec from the Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=dauhuniec.dauhuniec)**,
+or search for **Dauhuniec** in VS Code's Extensions view. You can also run:
 
 ```sh
-git clone https://github.com/mikitabianko/Dauhuniec.git
-cd Dauhuniec
-go test ./...
-go run ./cmd/package
-cd extension
-pnpm install --frozen-lockfile
-pnpm test
-pnpm run package
+code --install-extension dauhuniec.dauhuniec
 ```
 
-Install the resulting `releases/dauhuniec-0.1.2.vsix` from the repository root.
-The build also produces six native CLI executables in `bin/` and a `SHA256SUMS`
-file. These outputs are excluded from source control.
+Requires **VS Code 1.95 or later**. C/C++ and Cortex-Debug are included as companion
+extensions; install them manually if missing. Native CLI binaries are bundled for
+Windows, macOS and Linux on x64 and ARM64. Extension users do not need Go, Python
+or a separate Node.js installation.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development and packaging details.
+For manual installation, download the `.vsix` from the latest
+[GitHub Release](https://github.com/mikitabianko/Dauhuniec/releases/latest) and
+choose **Extensions → … → Install from VSIX…**. One installer includes all six
+CLI binaries.
 
-</details>
+## Required tools
+
+| Tool | Purpose |
+| --- | --- |
+| [STM32CubeMX](https://www.st.com/en/development-tools/stm32cubemx.html) | Configure the MCU and generate a **Makefile** project. |
+| [STM32CubeIDE](https://www.st.com/en/development-tools/stm32cubeide.html) | Supplies ARM GCC, GDB, ST-LINK GDB server and STM32CubeProgrammer. Dauhuniec uses these tools directly. |
+| GNU Make | Builds the generated project; see platform setup below. |
+| STM32 board with ST-LINK | Needed for flashing and debugging. An onboard probe and a data-capable USB cable are sufficient. |
+
+- **Windows:** Make is detected inside CubeIDE. Install the [ST-LINK USB driver](https://www.st.com/en/development-tools/stsw-link009.html) as needed. See the [Windows setup guide](extension/docs/windows.md).
+- **macOS:** install Command Line Tools with `xcode-select --install` to provide Make.
+- **Linux:** install `make` through your package manager and CubeIDE's ST-LINK udev rules; ensure your user can access the device.
+
+Official download links are also available through **Dauhuniec: Install Tools / Official Downloads**.
 
 ## Quick start
 
-1. Open or create your project in **STM32CubeMX**. Under
-   **Project Manager → Project → Toolchain / IDE**, select **Makefile** and generate code.
-2. Open the generated project folder in VS Code. Its root should contain one
-   `.ioc` file and the generated `Makefile`.
-3. Open **Dauhuniec** in the activity bar and choose **Configure Project**, or run
-   **Dauhuniec: Configure CubeMX Project** from the Command Palette.
-   If detection needs help, select your CubeIDE installation or Make executable.
-4. Run **Dauhuniec: Build** to compile the firmware.
-5. Connect ST-LINK and use **Project → Target Board** to select your target,
-   especially when more than one probe is connected.
-6. Choose the action you need:
+1. Create or open a project in **STM32CubeMX**. You can launch it with
+   **Dauhuniec: Open in STM32CubeMX / Create Project**.
+2. Select **Project Manager → Project → Toolchain / IDE → Makefile** and generate code.
+3. Open the generated project folder in VS Code. Its root should contain one `.ioc` file and the `Makefile`.
+4. Open **Dauhuniec** in the activity bar and choose **Configure Project**.
+   If asked, select your CubeIDE installation or GNU Make executable.
+5. Run **Dauhuniec: Build**.
+6. Connect ST-LINK, select **Project → Target Board** if needed, then choose
+   **Build, Flash and Run** or **Start Debugging**.
 
-| Command Palette action | Behavior |
+![Cortex-Debug paused in the NUCLEO-F411RE Blink loop](extension/media/screenshots/debug.png)
+
+The example runs on a physical **NUCLEO-F411RE**. ST-LINK serial numbers are
+hidden in the screenshots.
+
+For F5 debugging, select **Dauhuniec: Debug** in Run and Debug. The status bar
+also provides shortcuts for CubeMX, building, flashing, debugging and the serial monitor.
+
+Setup adds local tools under `.dauhuniec/` and merges editor configuration into
+`.vscode/`, backing up existing editor files. Firmware sources, the `.ioc`, linker
+script and Makefile stay unchanged. Keep application code in CubeMX's `USER CODE`
+sections when regenerating; clean and rebuild after changing the source/driver set.
+
+## Select a target board
+
+Open **Project → Target Board** to choose the board that receives firmware.
+Dauhuniec remembers its ST-LINK serial number per project. The example shows
+NUCLEO-F411RE selected while NUCLEO-H723ZG is also connected; serial numbers are
+hidden in the image.
+
+![Selecting NUCLEO-F411RE with two Nucleo boards connected](extension/media/screenshots/target-board.png)
+
+## Focus on USER CODE
+
+Run **Dauhuniec: Focus on USER CODE** or use the editor title button to hide
+generated sections. **Show Full File** restores the complete view. This changes
+editor folding only; your source files and CubeMX regeneration stay unchanged.
+
+The same `main.c` before and after focusing. Generated initialization and helper
+code fold away; USER CODE blocks and their function context stay visible.
+
+| Full file | Focus on USER CODE |
 | --- | --- |
-| **Dauhuniec: Build** | Compile without flashing. |
-| **Dauhuniec: Flash Firmware (Without Building)** | Flash the existing ELF and run it. |
-| **Dauhuniec: Build, Flash and Run** | Build, flash and run the firmware. |
-| **Dauhuniec: Start Debugging** | Build and launch Cortex-Debug. |
+| [![Full CubeMX-generated main.c](extension/media/screenshots/user-code-full.png)](extension/media/screenshots/user-code-full.png) | [![The same main.c with generated sections folded](extension/media/screenshots/user-code-focus.png)](extension/media/screenshots/user-code-focus.png) |
 
-The status bar provides shortcuts for these actions; hover over an icon to see
-its action. For F5 debugging, select **Dauhuniec: Debug** in Run and Debug.
+## Serial monitor
 
-Setup adds project-local tools and settings under `.dauhuniec/` and merges editor
-configuration into `.vscode/`, backing up existing editor files. Firmware sources,
-the `.ioc`, linker script and Makefile stay unchanged. Keep application code in
-CubeMX's `USER CODE` sections when regenerating.
+Run **Dauhuniec: Open Serial Monitor**, choose your board's port and baud rate,
+and read incoming data in VS Code's Terminal panel. Type a message and press Enter
+to send it. Use `/hex` and `/text` to switch the receive display, `/log PATH` to
+record RX/TX, and `/quit` or Ctrl+C to disconnect.
+
+![Serial Monitor receiving real Blink messages from NUCLEO-F411RE](extension/media/screenshots/serial-monitor.png)
+
+This example receives USART2 messages through the F411RE's ST-LINK virtual serial
+port at **115200 baud, 8N1**. The port name is hidden. See the
+[Serial Monitor guide](extension/README.md#serial-monitor) for console commands.
+
+## Documentation
+
+Open **Resources → Documentation · MCU / Board / HAL / RTOS** to find references
+for the MCU and board in your `.ioc`, HAL/LL manuals and RTOS documentation.
+Official PDF manuals are downloaded on demand and reused offline. Local manuals
+and schematics appear in the same picker.
+
+![MCU, board, HAL and RTOS documentation for the F411RE demo](extension/media/screenshots/documentation.png)
+
+## Compatibility
+
+The build workflow supports standard **single-core STM32 MCU Makefile exports**
+with literal `TARGET` and `BUILD_DIR` assignments. CMake, IAR/EWARM,
+CubeIDE-managed builds, multi-core and STM32MP projects are not automatically
+converted. USER CODE focus also works independently of build setup.
+
+| Platform | Validation status |
+| --- | --- |
+| Windows | Tested. See the [Windows setup guide](extension/docs/windows.md). |
+| macOS | Tested; local validation includes Intel macOS. |
+| Linux | Native binaries supplied; runtime and hardware verification still needed. |
+
+Binaries are supplied for x64 and ARM64 on each platform. This availability does
+not imply that every OS, architecture, board and probe combination has been tested.
+On Windows ARM64, CubeIDE tools and USB drivers must also support your machine.
+
+Local desktop development is the primary workflow. For SSH, WSL or containers,
+tools and USB/serial devices must be accessible on the workspace host.
 
 ## CLI
 
-The optional `lon` CLI supports setup, environment checks, builds, flashing and
-serial communication outside the extension. After configuring a firmware project,
-run its local copy from that project's root:
+The bundled native CLI is called **`lon`**, from Belarusian **лён-даўгунец**
+(fibre flax), the source of the Dauhuniec name. After configuring a firmware
+project, run its local copy from that project's root:
 
 ```sh
 ./.dauhuniec/lon doctor
@@ -129,51 +161,26 @@ run its local copy from that project's root:
 ```
 
 On Windows, use `.\.dauhuniec\lon.exe` and a port such as `COM3`; Linux ports often
-look like `/dev/ttyACM0`. Run `--help` for the command list.
+look like `/dev/ttyACM0`. Run `--help` for all commands. Adding `lon` to PATH is optional.
+See the [CLI guide](docs/guide.md#cli-without-the-extension) for standalone setup.
 
-For initial setup without the extension, build the native executables using the
-source instructions above, then run `sh setup.sh /path/to/firmware` on macOS/Linux
-or `setup.cmd C:\path\to\firmware` on Windows from the repository root.
+## Help and contributing
 
-Adding a standalone `lon` executable to **PATH is optional**. The extension and
-generated project tasks use their own executable paths and do not require it.
+- **Tools not found:** run **Dauhuniec: Check Environment**, select CubeIDE or Make and reconfigure. Reconfigure after moving the project or updating CubeIDE.
+- **ST-LINK not found:** check the USB cable, driver/udev rules, other debuggers and **Target Board**.
+- **Breakpoints do not match:** clean and rebuild, then restart debugging.
+- **Serial port busy:** close other serial applications; exit Dauhuniec's console with `/quit` or Ctrl+C to release the port.
 
-## Compatibility
+See the [extension overview](extension/README.md), [user guide](docs/guide.md)
+and [documentation sources](extension/docs/SOURCES.md). When
+[reporting an issue](https://github.com/mikitabianko/Dauhuniec/issues), include
+your OS, tool versions and relevant output from **Dauhuniec: Show Logs**.
 
-Dauhuniec supports standard **single-core STM32 MCU Makefile exports**, with
-literal `TARGET` and `BUILD_DIR` assignments. CMake, IAR/EWARM, CubeIDE-managed
-builds, multi-core and STM32MP projects are not automatically converted.
+For source builds, tests and packaging, read [CONTRIBUTING.md](CONTRIBUTING.md).
+Release automation is described in [release administration](docs/releasing.md).
 
-Native binaries build for **macOS, Windows and Linux**, on **x86_64 and ARM64**.
-Personal testing has so far been on **macOS**. Windows/Linux runtime behavior and
-hardware flashing, debugging and serial communication on each platform still
-need verification.
+## License
 
-For SSH, WSL or containers, native tools and USB/serial devices must be accessible
-on the workspace host. Local desktop development is the primary workflow.
-
-## Help
-
-- **Tools not found:** run **Dauhuniec: Check Environment**, then select the
-  CubeIDE installation or GNU Make executable. Reconfigure after moving the
-  project or updating CubeIDE.
-- **ST-LINK not found:** check the cable, USB driver or udev rules, close other
-  debuggers, and check **Target Board**.
-- **No ELF or stale breakpoints:** build first; clean and rebuild after changes
-  to generated sources or drivers.
-- **Serial port busy:** stop other serial applications; use `/quit` or Ctrl+C to
-  release a port held by Dauhuniec's console.
-
-Read the [user guide](docs/guide.md) or the
-[extension guide](extension/README.md) for detailed usage, settings and serial commands.
-See the [changelog](extension/CHANGELOG.md) and
-[documentation sources](extension/docs/SOURCES.md), or
-[report an issue](https://github.com/mikitabianko/Dauhuniec/issues) with your OS,
-tool versions and relevant logs.
-
-## Licenses
-
-The project's own code is licensed under the [MIT License](LICENSE).
-[GO-LICENSE.txt](GO-LICENSE.txt) covers the Go runtime;
-[THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) contains Go dependency notices.
+[MIT](LICENSE). [GO-LICENSE.txt](GO-LICENSE.txt) covers the Go runtime;
+[THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) lists dependency notices.
 Official manuals remain subject to their publishers' terms.

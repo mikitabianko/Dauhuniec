@@ -20,7 +20,7 @@ import (
 
 var assets = dauhuniec.Assets
 
-const version = "0.1.2"
+const version = "0.1.3"
 const stateDir = ".dauhuniec"
 const previousStateDir = ".lon"
 const legacyStateDir = ".stm32-codeready"
