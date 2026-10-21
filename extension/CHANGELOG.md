@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.4
+
+- Expand both READMEs with environment checks, project setup and rollback instructions, a shared Makefile workflow for VS Code and CubeIDE, and troubleshooting guidance.
+- Clarify supported project formats, platform validation, remote workspace requirements, probe selection, serial monitor behavior and offline documentation caching.
+- Add a screenshot overview, companion extension details, an official ST workflow comparison and a roadmap.
+- Replace retired Marketplace badges with an installation badge and center the logo in both READMEs.
+
 ## 0.1.3
 
 - Rework the READMEs around Marketplace installation, quick start and everyday workflows; update Windows testing status.
