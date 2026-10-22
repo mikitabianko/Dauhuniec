@@ -15,7 +15,7 @@ func fixture(t *testing.T) string {
 	root := t.TempDir()
 	for name, data := range map[string]string{
 		"Lab.ioc":  "Mcu.CPN=STM32F429ZIT6\r\nProjectManager.TargetToolchain=Makefile\r\n",
-		"Makefile": "TARGET = Lab02\nBUILD_DIR := artifacts/build\n",
+		"Makefile": "TARGET = Lab02\nBUILD_DIR := artifacts/build\n.PHONY: all\nall:\n\t$(CC) -DTEST_PROJECT -ICore/Inc -mcpu=cortex-m4 -mthumb -c main.c -o $(BUILD_DIR)/main.o\n",
 	} {
 		if err := os.WriteFile(filepath.Join(root, name), []byte(data), 0644); err != nil {
 			t.Fatal(err)

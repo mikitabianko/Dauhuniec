@@ -17,7 +17,12 @@ export function parseProbeReport(text: string): ProbeReport {
   return value;
 }
 
-export function pinDebugTarget<T extends object>(configuration: T, serial: string): T & { serialNumber: string; serverArgs: string[] } {
+export function pinDebugTarget<T extends object>(configuration: T, serial: string): T & { serialNumber: string; serverArgs: string[]; serverpath?: string } {
+  // Older Dauhuniec launch files used serverPath, which Cortex-Debug ignores.
+  // Repair the launch in memory and keep an explicitly configured serverpath.
+  const normalized = { ...configuration } as T & { serverpath?: string; serverPath?: string };
+  if (!normalized.serverpath && normalized.serverPath) normalized.serverpath = normalized.serverPath;
+  delete normalized.serverPath;
   const args: string[] = [];
   const previous = (configuration as { serverArgs?: string[] }).serverArgs || [];
   for (let index = 0; index < previous.length; index++) {
@@ -26,7 +31,7 @@ export function pinDebugTarget<T extends object>(configuration: T, serial: strin
     if (argument.startsWith('--serial-number=')) continue;
     args.push(argument);
   }
-  return { ...configuration, serialNumber: serial, serverArgs: args };
+  return { ...normalized, serialNumber: serial, serverArgs: args };
 }
 
 export function connectedTarget(report: ProbeReport, explicit?: string): Probe | undefined {

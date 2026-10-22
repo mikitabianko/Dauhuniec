@@ -13,7 +13,7 @@
       "gdbPath": "${config:dauhuniec.gdb}",
       "objdumpPath": "${config:dauhuniec.objdump}",
       "nmPath": "${config:dauhuniec.nm}",
-      "serverPath": "${config:dauhuniec.server}",
+      "serverpath": "${config:dauhuniec.server}",
       "stm32cubeprogrammer": "${config:dauhuniec.programmerDir}",
       "serverArgs": [
         "-k"
@@ -36,7 +36,7 @@
       "gdbPath": "${config:dauhuniec.gdb}",
       "objdumpPath": "${config:dauhuniec.objdump}",
       "nmPath": "${config:dauhuniec.nm}",
-      "serverPath": "${config:dauhuniec.server}",
+      "serverpath": "${config:dauhuniec.server}",
       "stm32cubeprogrammer": "${config:dauhuniec.programmerDir}",
       "serverArgs": [
         "-k"

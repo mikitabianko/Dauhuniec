@@ -68,7 +68,7 @@ Nested user blocks are preserved in full.
 - [STM32CubeIDE](https://www.st.com/en/development-tools/stm32cubeide.html) with GNU Tools
   for STM32, ARM GDB, ST-LINK GDB server, and STM32CubeProgrammer. Its tools are
   used; you do not need to open the project in CubeIDE itself.
-- [VS Code](https://code.visualstudio.com/), **C/C++** (`ms-vscode.cpptools`), and
+- [VS Code](https://code.visualstudio.com/), **clangd** (`llvm-vs-code-extensions.vscode-clangd`), and
   **Cortex-Debug** (`marus25.cortex-debug`). They are listed as companion extensions
   for Dauhuniec and can be installed manually.
 - GNU Make. Docker, hvy, IAR, CMake, and probe-rs are not required for this workflow.
@@ -155,6 +155,40 @@ inside `USER CODE` blocks. After changing the set of files, run Clean, then Buil
 Run Configure again after renaming or moving a project, or updating CubeIDE.
 Do not commit local `.vscode/settings.json`, `tools.json`, backups, or build
 output to Git. Configure each new computer separately.
+
+Configure creates or updates a marked Dauhuniec block in `.gitignore`, including
+the current Makefile `BUILD_DIR`. Existing rules outside the block are preserved;
+custom exceptions should follow the block. Logging rules cover `serial*.jsonl`
+and `*.log`; add custom recording filenames yourself. Already tracked files
+remain tracked. To undo this change, remove the marked block.
+
+Configure Project selects one clangd language server: `clangd.enable = true`,
+`C_Cpp.intelliSenseEngine = "disabled"`, and `stm32cube-ide-clangd.enable = false`.
+Semantic highlighting is enabled. Global editor settings stay unchanged and
+previous workspace values are saved in the `.vscode/` backup.
+
+Dauhuniec installs the official **clangd** extension if missing. It offers to
+download the language server when no executable is available. To install or retry
+later, run **Dauhuniec: Install / Update clangd** from the Command Palette or
+Resources. An internet connection is needed for extension/server downloads;
+after installation, navigation works offline. For an existing offline installation,
+set `clangd.path` to its executable; Dauhuniec preserves that setting.
+
+The CLI expands the Makefile's compiler recipes with Make's dry run and writes
+`.dauhuniec/compile_commands.json`, including per-file flags and the selected
+ARM GCC path. It refreshes the database during setup, before Build/Build + Flash,
+and with `lon compdb`. VS Code also refreshes it when the project opens, Makefile
+or `.mk` files change, or C/C++ source files are added or removed. The old database
+is retained if generation fails; the Project panel reports refresh failures.
+Custom Makefiles must expose C/C++ recipes through `$(CC)` or `$(CXX)`; compound
+shell recipes and recursive builds are not supported by this database generator.
+
+Open the project's own folder and allow the initial background index to finish.
+Use **F12 / Go to Definition**, **Shift+F12 / Find All References**, and workspace
+symbol search to navigate application code, HAL and CMSIS used by the build.
+If language features remain inactive after migration, run **Developer: Reload
+Window**. The Project panel detects a missing clangd extension and conflicting
+language-server settings; exported diagnostics include their effective values.
 
 ## CLI without the extension
 
@@ -269,6 +303,19 @@ host. Hiding the terminal does not interrupt the session; exit with /quit or
 Ctrl+C to release the port. Whether the terminal survives a window reload depends
 on VS Code settings. Serial communication depends on the device, driver and
 port permissions on the workspace host.
+
+The isolated clangd host check uses a disposable STM32F4 project with HAL GPIO
+and Ethernet types. It verifies definitions and automatic database refresh without
+flashing hardware. Provide an installed official clangd extension and server:
+
+```sh
+DAUHUNIEC_CLANGD_EXTENSION=/path/to/llvm-vs-code-extensions.vscode-clangd-version \
+DAUHUNIEC_CLANGD=/path/to/clangd \
+pnpm --dir extension run test:host /tmp/disposable-configured-project --clangd
+```
+
+The host test changes and restores the disposable project's Makefile and briefly
+adds a C source file. It uses a separate VS Code profile and extension directory.
 
 ## Development
 

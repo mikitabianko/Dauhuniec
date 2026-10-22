@@ -43,11 +43,15 @@ export class ProjectToolbar implements vscode.Disposable {
       if (state.cancellable) show('stop', '$(debug-stop)', 'dauhuniec.stopTask', `Dauhuniec: Stop Task\n${state.busy}`);
       return;
     }
-    if (!report?.ready) return;
-    show('build', '$(check)', 'dauhuniec.build', `Dauhuniec: Build Firmware\n${path.basename(report.root)} · Compile without flashing`);
-    show('upload', '$(arrow-up)', 'dauhuniec.upload', `Dauhuniec: Flash Firmware\n${path.basename(report.root)} · Flash the existing ELF and run; no build`);
-    show('flash', '$(rocket)', 'dauhuniec.flash', `Dauhuniec: Build and Flash\n${path.basename(report.root)} · Build, flash and run firmware`);
-    show('debug', '$(debug-alt)', 'dauhuniec.debug', `Dauhuniec: Start Debugging\n${path.basename(report.root)} · Build firmware and launch Cortex-Debug`);
+    const actions=report?.toolDiscovery?.actions;
+    const buildAvailable=!!report?.ready || !!actions?.build;
+    const flashAvailable=!!report?.ready || !!actions?.flash;
+    const debugAvailable=!!report?.ready || !!actions?.debug;
+    if(!report?.project)return;
+    if(buildAvailable)show('build', '$(check)', 'dauhuniec.build', `Dauhuniec: Build Firmware\n${path.basename(report.root)} · Compile without flashing`);
+    if(flashAvailable)show('upload', '$(arrow-up)', 'dauhuniec.upload', `Dauhuniec: Flash Firmware\n${path.basename(report.root)} · Flash the existing ELF and run; no build`);
+    if(buildAvailable&&flashAvailable)show('flash', '$(rocket)', 'dauhuniec.flash', `Dauhuniec: Build and Flash\n${path.basename(report.root)} · Build, flash and run firmware`);
+    if(buildAvailable&&debugAvailable)show('debug', '$(debug-alt)', 'dauhuniec.debug', `Dauhuniec: Start Debugging\n${path.basename(report.root)} · Build firmware and launch Cortex-Debug`);
   }
 
   dispose(): void { for (const item of this.items.values()) item.dispose(); }

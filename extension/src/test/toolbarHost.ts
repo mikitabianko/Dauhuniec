@@ -2,9 +2,11 @@ import * as assert from 'node:assert/strict';
 import * as vscode from 'vscode';
 import { ProjectToolbar } from '../toolbar';
 import { Report } from '../service';
-
 export function testToolbar(): void {
-  const items = new Map<string, { item: vscode.StatusBarItem; visible: boolean }>();
+  const items = new Map<string, {
+    item: vscode.StatusBarItem;
+    visible: boolean;
+  }>();
   const toolbar = new ProjectToolbar((id, alignment, priority) => {
     const item = vscode.window.createStatusBarItem(id, alignment, priority);
     const state = { item, visible: false };
@@ -29,6 +31,8 @@ export function testToolbar(): void {
     toolbar.update({ projectCount: 1, report: { ...report, ready: false } });
     assert.deepEqual(visible(), ['home', 'cubeMX', 'serialMonitor']);
     assert.match(items.get('home')!.item.text, /warning/);
+    toolbar.update({projectCount:1,report:{...report,ready:false,toolDiscovery:{schemaVersion:1,version:'test',tools:{},checks:[],details:{},alternatives:{},actions:{build:{gcc:'gcc',objcopy:'objcopy',size:'size',make:'make'}}}}});
+    assert.deepEqual(visible(),['home','cubeMX','build','serialMonitor'],'missing optional debug/programming tools do not hide Build');
     toolbar.update({ projectCount: 1, report });
     assert.deepEqual(visible(), ['home', 'cubeMX', 'build', 'upload', 'flash', 'debug', 'serialMonitor']);
     assert.equal(items.get('home')!.item.text, '$(home)');
@@ -58,6 +62,9 @@ export function testToolbar(): void {
     assert.equal(items.get('home')!.item.text, '$(home)');
     toolbar.update({ projectCount: 0 });
     assert.deepEqual(visible(), ['serialMonitor'], 'serial monitor stays available without CubeMX projects');
-  } finally { toolbar.dispose(); }
+  }
+  finally {
+    toolbar.dispose();
+  }
   console.log('DAUHUNIEC_TOOLBAR_TEST_PASS: direct icon shortcuts, command routing, setup, progress, stop, failure recovery and workspace removal');
 }

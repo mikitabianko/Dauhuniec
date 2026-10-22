@@ -48,7 +48,7 @@ or search for **Dauhuniec** in VS Code's Extensions view. You can also run:
 code --install-extension dauhuniec.dauhuniec
 ```
 
-Requires **VS Code 1.95 or later**. C/C++ and Cortex-Debug are declared as companion
+Requires **VS Code 1.95 or later**. clangd and Cortex-Debug are declared as companion
 extensions; install them manually if missing. Native CLI binaries are bundled for
 Windows, macOS and Linux on x64 and ARM64. Extension users do not need Go, Python
 or a separate Node.js installation.
@@ -164,8 +164,10 @@ schematics appear in the same picker.
 | Location | What Dauhuniec writes |
 | --- | --- |
 | `.dauhuniec/` | Local `lon` executable, `tools.json`, selected probe in `target.json`, setup README, license and local ignore rules. Tool paths and probe selection belong to this computer. |
+| `.dauhuniec/compile_commands.json` | Generated commands for clangd, with local compiler paths. Refreshed automatically; keep out of Git. |
 | `.dauhuniec/backups/vscode-<timestamp>/` | A copy of the existing `.vscode/` directory before configuration, when it is nonempty. |
 | `.vscode/` | Merged `settings.json`, `tasks.json`, `launch.json`, `c_cpp_properties.json` and `extensions.json`. Unrelated entries are preserved; updated JSON is reformatted and comments are removed. |
+| `.gitignore` | Creates or updates a marked Dauhuniec block for the Makefile's build directory, local Dauhuniec and VS Code settings, serial recordings, logs and OS files. Rules outside the block are preserved. |
 | Makefile's `BUILD_DIR` (usually `build/`) | Compiler output during builds; **Clean Build** deletes this directory without invoking `make clean`. |
 | Serial log path chosen by you | Timestamped RX/TX records appended when logging is enabled. |
 
@@ -183,6 +185,47 @@ kept in VS Code workspace state. Deleting `.dauhuniec/` does not reset these.
 Keep machine-specific paths, probe selection, backups and build output out of Git.
 Configure each teammate's checkout separately.
 
+Setup maintains the block between `# BEGIN Dauhuniec (managed by lon setup)` and
+`# END Dauhuniec` in `.gitignore`, refreshing `BUILD_DIR` when you configure again.
+For an existing file, the block is inserted before your rules so later exceptions
+such as `!serial-example.jsonl` keep their priority. Put custom rules outside the
+block; only its contents are replaced. Existing line endings and file permissions
+are preserved. Malformed or duplicate markers and symbolic links cause an error
+without rewriting `.gitignore`.
+
+Build and tool directories are ignored relative to the project root. Firmware
+sources, `.ioc`, Makefile, drivers and linker scripts remain eligible for Git.
+Serial rules cover `serial*.jsonl` and `*.log`; add your own rule for recordings
+saved under other names. Ignore rules do not untrack files already committed.
+
+Configure Project selects one clangd language server: `clangd.enable = true`,
+`C_Cpp.intelliSenseEngine = "disabled"`, and `stm32cube-ide-clangd.enable = false`.
+Semantic highlighting is enabled. Global editor settings stay unchanged and
+previous workspace values are saved in the `.vscode/` backup.
+
+Dauhuniec installs the official **clangd** extension if missing. It offers to
+download the language server when no executable is available. To install or retry
+later, run **Dauhuniec: Install / Update clangd** from the Command Palette or
+Resources. An internet connection is needed for extension/server downloads;
+after installation, navigation works offline. For an existing offline installation,
+set `clangd.path` to its executable; Dauhuniec preserves that setting.
+
+The CLI expands the Makefile's compiler recipes with Make's dry run and writes
+`.dauhuniec/compile_commands.json`, including per-file flags and the selected
+ARM GCC path. It refreshes the database during setup, before Build/Build + Flash,
+and with `lon compdb`. VS Code also refreshes it when the project opens, Makefile
+or `.mk` files change, or C/C++ source files are added or removed. The old database
+is retained if generation fails; the Project panel reports refresh failures.
+Custom Makefiles must expose C/C++ recipes through `$(CC)` or `$(CXX)`; compound
+shell recipes and recursive builds are not supported by this database generator.
+
+Open the project's own folder and allow the initial background index to finish.
+Use **F12 / Go to Definition**, **Shift+F12 / Find All References**, and workspace
+symbol search to navigate application code, HAL and CMSIS used by the build.
+If language features remain inactive after migration, run **Developer: Reload
+Window**. The Project panel detects a missing clangd extension and conflicting
+language-server settings; exported diagnostics include their effective values.
+
 ### Undo setup
 
 1. Stop debugging, active build tasks and the serial monitor.
@@ -192,6 +235,8 @@ Configure each teammate's checkout separately.
 3. Restore that backup as `.vscode/`. If there was no previous editor configuration,
    remove only the files/entries created by Dauhuniec and keep any later additions.
 4. Delete `.dauhuniec/`. Disable or uninstall Dauhuniec if you no longer want setup prompts.
+5. Remove the marked Dauhuniec block from `.gitignore` if its rules are no longer needed;
+   keep any custom rules outside it.
 
 Firmware files need no restoration for changes made by Dauhuniec setup.
 
@@ -343,8 +388,8 @@ for the official workflow. Dauhuniec is an independent project.
 
 ## Companion extensions
 
-- [C/C++](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools):
-  IntelliSense and code navigation using the generated compiler configuration.
+- [clangd](https://marketplace.visualstudio.com/items?itemName=llvm-vs-code-extensions.vscode-clangd):
+  semantic highlighting, completion and navigation using generated compilation commands.
 - [Cortex-Debug](https://marketplace.visualstudio.com/items?itemName=marus25.cortex-debug):
   runs Dauhuniec's debug configurations with GDB and the ST-LINK server.
 
@@ -403,3 +448,5 @@ Search phrases describing the workflow covered by this project:
 [MIT](LICENSE). [GO-LICENSE.txt](GO-LICENSE.txt) covers the Go runtime;
 [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) lists dependency notices.
 Official manuals remain subject to their publishers' terms.
+
+Tool discovery now runs through `lon tools --json --diagnostics`, including CubeMX without a project. Invalid user paths offer discovered alternatives; managed paths recover automatically. Use **Dauhuniec: Export Diagnostic Report** to save a redacted support ZIP. See [discovery, recovery and report details](docs/tool-discovery.md).

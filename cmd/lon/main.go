@@ -20,7 +20,7 @@ import (
 
 var assets = dauhuniec.Assets
 
-const version = "0.1.3"
+const version = "0.1.4"
 const stateDir = ".dauhuniec"
 const previousStateDir = ".lon"
 const legacyStateDir = ".stm32-codeready"
@@ -33,8 +33,9 @@ type project struct {
 }
 
 type config struct {
-	Project project           `json:"project"`
-	Tools   map[string]string `json:"tools"`
+	Selection map[string]toolCandidate `json:"selection,omitempty"`
+	Project   project                  `json:"project"`
+	Tools     map[string]string        `json:"tools"`
 }
 
 type options struct {
@@ -42,6 +43,10 @@ type options struct {
 	project     string
 	ide         string
 	make        string
+	cubeMX      string
+	diagnostics bool
+	known       map[string]string
+	action      string
 	json        bool
 }
 
@@ -54,9 +59,10 @@ func main() {
 
 func dispatch(args []string) error {
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
-		fmt.Println(`lon setup [PROJECT] [--cube-ide PATH] [--make PATH]
+		fmt.Println(`lon tools --json [--cube-ide PATH] [--make PATH] [--cube-mx PATH] [--diagnostics]
+lon setup [PROJECT] [--cube-ide PATH] [--make PATH]
 lon inspect|doctor [--project PATH] [--json] [--cube-ide PATH] [--make PATH]
-lon build|clean|flash|upload|list-probes [--project PATH]
+lon build|clean|flash|upload|list-probes|compdb [--project PATH]
 lon probes --json [--project PATH]
 lon select-probe --probe-serial SERIAL [--project PATH] [--json]
 lon serial-list
@@ -74,6 +80,9 @@ Without a project path, use the installed project or the current directory.`)
 		return nil
 	}
 	action := args[0]
+	if action == "tools" {
+		return toolsCommand(args[1:])
+	}
 	if action == "serial-console" {
 		return serialConsoleCommand(args[1:], os.Stdin, os.Stdout)
 	}
@@ -81,7 +90,7 @@ Without a project path, use the installed project or the current directory.`)
 		return serialCommand(action, args[1:], os.Stdin, os.Stdout)
 	}
 	switch action {
-	case "setup", "inspect", "build", "clean", "doctor", "flash", "upload", "list-probes", "probes", "select-probe":
+	case "setup", "compdb", "inspect", "build", "clean", "doctor", "flash", "upload", "list-probes", "probes", "select-probe":
 	default:
 		return fmt.Errorf("unknown command %q; use --help", action)
 	}
@@ -105,7 +114,11 @@ Without a project path, use the installed project or the current directory.`)
 	if action == "inspect" || action == "doctor" {
 		return printReport(inspect(root, opts, action == "doctor"), opts.json)
 	}
-	cfg, err := loadConfig(root)
+	loadAction := action
+	if action == "compdb" {
+		loadAction = "build"
+	}
+	cfg, err := loadConfigFor(root, loadAction)
 	if err != nil {
 		return err
 	}
@@ -141,6 +154,14 @@ Without a project path, use the installed project or the current directory.`)
 		}
 		return json.NewEncoder(os.Stdout).Encode(report)
 	}
+	if action == "compdb" || action == "build" || action == "flash" {
+		if err := generateCompilationDatabase(root, cfg); err != nil {
+			return err
+		}
+		if action == "compdb" {
+			return nil
+		}
+	}
 	serial := ""
 	if action == "flash" || action == "upload" {
 		selected, err := requireProbe(root, cfg, opts.probeSerial)
@@ -156,6 +177,27 @@ func parseOptions(args []string, setup bool) (options, error) {
 	var opts options
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
+		case "--action":
+			i++
+			if i == len(args) || actionRequirements[args[i]] == nil {
+				return opts, errors.New("invalid --action")
+			}
+			opts.action = args[i]
+		case "--known":
+			i++
+			if i == len(args) {
+				return opts, errors.New("--known requires key=path")
+			}
+			k, v, ok := strings.Cut(args[i], "=")
+			if !ok || v == "" {
+				return opts, errors.New("--known requires key=path")
+			}
+			if opts.known == nil {
+				opts.known = map[string]string{}
+			}
+			opts.known[k] = v
+		case "--diagnostics":
+			opts.diagnostics = true
 		case "--json":
 			opts.json = true
 		case "--probe-serial":
@@ -164,7 +206,7 @@ func parseOptions(args []string, setup bool) (options, error) {
 				return opts, errors.New("specify one valid --probe-serial SERIAL")
 			}
 			opts.probeSerial = strings.ToUpper(args[i])
-		case "--project", "--cube-ide", "--make":
+		case "--project", "--cube-ide", "--make", "--cube-mx":
 			key := args[i]
 			if key != "--project" && !setup {
 				return opts, fmt.Errorf("%s is only supported with setup", key)
@@ -183,6 +225,8 @@ func parseOptions(args []string, setup bool) (options, error) {
 				opts.ide = args[i]
 			case "--make":
 				opts.make = args[i]
+			case "--cube-mx":
+				opts.cubeMX = args[i]
 			}
 		default:
 			if !setup || strings.HasPrefix(args[i], "-") || opts.project != "" {
@@ -226,9 +270,15 @@ func canonical(path string) (string, error) {
 
 func readProject(root string) (project, error) {
 	var p project
-	iocs, err := filepath.Glob(filepath.Join(root, "*.ioc"))
+	entries, err := os.ReadDir(root)
 	if err != nil {
 		return p, err
+	}
+	var iocs []string
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".ioc") && !entry.IsDir() {
+			iocs = append(iocs, filepath.Join(root, entry.Name()))
+		}
 	}
 	if !regularFile(filepath.Join(root, "Makefile")) || len(iocs) != 1 {
 		return p, errors.New("select a CubeMX project containing Makefile and exactly one .ioc; generate code with Toolchain / IDE = Makefile under the project root")
@@ -335,52 +385,21 @@ func descending(paths []string) {
 }
 
 func findPlugins(explicit string) (string, error) {
-	candidates := []string{explicit}
-	if explicit == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		patterns := []string{"/Applications/STM32CubeIDE*.app", "/opt/st/stm32cubeide*",
-			filepath.Join(home, "st/stm32cubeide*"), filepath.Join(home, "STMicroelectronics/STM32Cube/STM32CubeIDE*"),
-			"C:/ST/STM32CubeIDE*", "C:/Program Files/STMicroelectronics/STM32Cube/STM32CubeIDE*"}
-		candidates = nil
-		for _, pattern := range patterns {
-			matches, err := filepath.Glob(filepath.FromSlash(pattern))
-			if err != nil {
-				return "", err
-			}
-			candidates = append(candidates, matches...)
-		}
-		descending(candidates)
+	if explicit != "" {
+		return pluginDirectory(explicit)
 	}
-	for _, root := range candidates {
-		for _, suffix := range []string{"", "plugins", "STM32CubeIDE/plugins", "Contents/Eclipse/plugins", "STM32CubeIDE.app/Contents/Eclipse/plugins"} {
-			candidate := filepath.Join(root, filepath.FromSlash(suffix))
-			matches, _ := filepath.Glob(filepath.Join(candidate, "com.st.stm32cube.ide.mcu.externaltools.*"))
-			for _, match := range matches {
-				if info, err := os.Stat(match); err == nil && info.IsDir() {
-					return canonical(candidate)
-				}
-			}
+	for _, root := range installationLocations(currentToolHost()) {
+		if p, err := pluginDirectory(root); err == nil {
+			return p, nil
 		}
 	}
-	return "", errors.New("CubeIDE tools not found; use setup --cube-ide <installation-or-plugins-directory>")
+	return "", errors.New("CubeIDE tools not found; select a full installation")
 }
-
 func findTool(plugins, family, binary string) (string, error) {
-	matches, err := filepath.Glob(filepath.Join(plugins, "com.st.stm32cube.ide.mcu.externaltools."+family+".*"))
-	if err != nil {
-		return "", err
+	if p := component(plugins, family, binary, currentToolHost()); p != "" {
+		return p, nil
 	}
-	descending(matches)
-	for _, plugin := range matches {
-		path := filepath.Join(plugin, "tools", "bin", binary+exeSuffix())
-		if regularFile(path) {
-			return canonical(path)
-		}
-	}
-	return "", fmt.Errorf("missing %s in %s; check the full CubeIDE installation", binary, plugins)
+	return "", fmt.Errorf("missing executable %s in %s", binary, plugins)
 }
 
 func exeSuffix() string {
@@ -398,12 +417,92 @@ func setup(root string, opts options) error {
 		return err
 	}
 	discovery := discoverTools(opts, savedTools(root))
+	if opts.action != "" {
+		shared := discoverShared(currentToolHost(), opts, savedTools(root), true)
+		selected := shared.Actions[opts.action]
+		if !suitable(selected, opts.action) {
+			return fmt.Errorf("tools unavailable for %s", opts.action)
+		}
+		discovery.Tools = copyTools(savedTools(root))
+		for k, v := range selected {
+			discovery.Tools[k] = v
+		}
+		discovery.Checks = nil
+		for _, c := range shared.Candidates {
+			if c.Kind != "cubeIDE" {
+				continue
+			}
+			matches := true
+			for _, key := range actionRequirements[opts.action] {
+				if key != "make" && c.Components[key] != selected[key] {
+					matches = false
+				}
+			}
+			if matches {
+				discovery.Plugins = c.Installation
+				break
+			}
+		}
+	}
 	if message := checkErrors(discovery.Checks); message != "" {
 		return errors.New(message)
 	}
 	plugins := discovery.Plugins
-	cfg := config{Project: p, Tools: discovery.Tools}
+	sharedSelection := discoverShared(currentToolHost(), opts, savedTools(root), true)
+	cfg := config{Project: p, Tools: discovery.Tools, Selection: map[string]toolCandidate{}}
+	for _, candidate := range sharedSelection.Candidates {
+		if candidate.Kind == "cubeIDE" {
+			if candidate.Installation == plugins && cfg.Selection["cubeIDE"].Resolved == "" {
+				cfg.Selection["cubeIDE"] = candidate
+			}
+			for key, path := range cfg.Tools {
+				if candidate.Components[key] == path && cfg.Selection[key].Resolved == "" {
+					c := candidate
+					c.Kind = key
+					c.Resolved = path
+					c.Components = nil
+					c.Files = nil
+					for _, v := range candidate.Files {
+						if v.Tool == key {
+							c.Files = append(c.Files, v)
+						}
+					}
+					cfg.Selection[key] = c
+				}
+			}
+		} else if candidate.Valid && candidate.Resolved != "" && candidate.Resolved == cfg.Tools[candidate.Kind] && cfg.Selection[candidate.Kind].Resolved == "" {
+			cfg.Selection[candidate.Kind] = candidate
+		}
+	}
+	// Preserve settings explicitly edited since the last successful setup.
+	previous := savedTools(root)
+	settings, err := readObject(filepath.Join(root, ".vscode/settings.json"))
+	if err != nil {
+		return err
+	}
+	required := actionRequirements["setup"]
+	if opts.action != "" {
+		required = actionRequirements[opts.action]
+	}
+	for _, key := range actionRequirements["setup"] {
+		if value, ok := settings["dauhuniec."+key].(string); ok && value != "" && value != previous[key] {
+			if containsTool(required, key) {
+				resolved, err := executablePath(value, runtime.GOOS)
+				if err != nil {
+					return fmt.Errorf("explicit %s path is invalid; select a discovered alternative: %w", key, err)
+				}
+				cfg.Tools[key] = resolved
+				cfg.Selection[key] = toolCandidate{Kind: key, Original: value, Resolved: resolved, Source: "setting", Valid: true, Reason: "explicit user executable setting preserved"}
+			} else if resolved, err := executablePath(value, runtime.GOOS); err == nil {
+				cfg.Tools[key] = resolved
+				cfg.Selection[key] = toolCandidate{Kind: key, Original: value, Resolved: resolved, Source: "setting", Valid: true, Reason: "explicit optional executable setting preserved"}
+			}
+		}
+	}
 	for _, key := range []string{"gcc", "gdb", "make"} {
+		if cfg.Tools[key] == "" || opts.action != "" && !containsTool(actionRequirements[opts.action], key) {
+			continue
+		}
 		if err := run(root, []string{cfg.Tools[key], "--version"}, nil); err != nil {
 			return err
 		}
@@ -421,6 +520,11 @@ func setup(root string, opts options) error {
 	}
 	if err := copyFile(exe, filepath.Join(state, binaryName()), 0755); err != nil {
 		return err
+	}
+	if cfg.Tools["gcc"] != "" && cfg.Tools["make"] != "" {
+		if err := generateCompilationDatabase(root, cfg); err != nil {
+			return err
+		}
 	}
 	if err := configureVSCode(root, plugins, cfg); err != nil {
 		return err
@@ -449,7 +553,10 @@ func setup(root string, opts options) error {
 	if err := os.WriteFile(filepath.Join(state, "GO-LICENSE.txt"), license, 0644); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(state, ".gitignore"), []byte("tools.json\ntarget.json\nbackups/\nlon\nlon.exe\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(state, ".gitignore"), []byte("tools.json\ntarget.json\nbackups/\nlon\nlon.exe\ncompile_commands.json\n.cache/\n"), 0644); err != nil {
+		return err
+	}
+	if err := createProjectGitignore(root, p); err != nil {
 		return err
 	}
 	fmt.Printf("Setup complete. Open %s in VS Code. Run Task > Build; F5: debug.\n", root)
@@ -537,7 +644,8 @@ func writeJSON(path string, value any) error {
 	return os.WriteFile(path, append(data, '\n'), 0644)
 }
 
-func loadConfig(root string) (config, error) {
+func loadConfig(root string) (config, error) { return loadConfigFor(root, "setup") }
+func loadConfigFor(root, action string) (config, error) {
 	var cfg config
 	data, err := os.ReadFile(filepath.Join(root, stateDir, "tools.json"))
 	if err != nil {
@@ -546,8 +654,15 @@ func loadConfig(root string) (config, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return cfg, err
 	}
-	for _, key := range []string{"gcc", "gdb", "objcopy", "objdump", "nm", "size", "server", "programmer", "make"} {
-		if !regularFile(cfg.Tools[key]) {
+	required := actionRequirements[action]
+	if action == "upload" || action == "list-probes" || action == "probes" || action == "select-probe" {
+		required = actionRequirements["flash"]
+	}
+	if action == "flash" {
+		required = append(append([]string{}, actionRequirements["build"]...), actionRequirements["flash"]...)
+	}
+	for _, key := range required {
+		if _, err := executablePath(cfg.Tools[key], runtime.GOOS); err != nil {
 			return cfg, fmt.Errorf("tool %s missing; run setup again", key)
 		}
 	}
@@ -618,4 +733,13 @@ func perform(root, action string, cfg config, execute runner, probeSerial ...str
 		return fmt.Errorf("unknown action %q", action)
 	}
 	return nil
+}
+
+func containsTool(keys []string, key string) bool {
+	for _, k := range keys {
+		if k == key {
+			return true
+		}
+	}
+	return false
 }
