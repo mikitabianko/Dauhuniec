@@ -14,7 +14,7 @@ export interface ToolbarState {
 export class ProjectToolbar implements vscode.Disposable {
   private readonly items = new Map<string, vscode.StatusBarItem>();
   constructor(createItem: (id: string, alignment: vscode.StatusBarAlignment, priority: number) => vscode.StatusBarItem = vscode.window.createStatusBarItem) {
-    ['home', 'cubeMX', 'build', 'upload', 'flash', 'debug', 'serialMonitor', 'stop'].forEach((name, index) => {
+    ['home', 'cubeMX', 'buildPreset', 'build', 'upload', 'flash', 'debug', 'serialMonitor', 'stop'].forEach((name, index) => {
       const item = createItem(`dauhuniec.${name}`, vscode.StatusBarAlignment.Left, 20 - index / 10);
       item.name = `Dauhuniec: ${name}`;
       this.items.set(name, item);
@@ -48,6 +48,7 @@ export class ProjectToolbar implements vscode.Disposable {
     const flashAvailable=!!report?.ready || !!actions?.flash;
     const debugAvailable=!!report?.ready || !!actions?.debug;
     if(!report?.project)return;
+    if (report.buildPreset) show('buildPreset', `$(layers) ${report.buildPreset}`, 'dauhuniec.selectBuildPreset', 'Dauhuniec: Select Build Preset');
     if(buildAvailable)show('build', '$(check)', 'dauhuniec.build', `Dauhuniec: Build Firmware\n${path.basename(report.root)} · Compile without flashing`);
     if(flashAvailable)show('upload', '$(arrow-up)', 'dauhuniec.upload', `Dauhuniec: Flash Firmware\n${path.basename(report.root)} · Flash the existing ELF and run; no build`);
     if(buildAvailable&&flashAvailable)show('flash', '$(rocket)', 'dauhuniec.flash', `Dauhuniec: Build and Flash\n${path.basename(report.root)} · Build, flash and run firmware`);

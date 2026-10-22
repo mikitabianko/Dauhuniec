@@ -24,7 +24,13 @@ type compileCommand struct {
 func generateCompilationDatabase(root string, cfg config) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	args := []string{"--no-print-directory", "-n", "-B", "GCC_PATH=", "PREFIX=arm-none-eabi-", "DEBUG=1", "OPT=-Og", "CC=dauhuniec-cc", "CXX=dauhuniec-cxx", "all"}
+	presetArgs, cleanup, err := presetMakeArgs(root, cfg)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	args := []string{"--no-print-directory", "-n", "-B", "GCC_PATH=", "PREFIX=arm-none-eabi-", "CC=dauhuniec-cc", "CXX=dauhuniec-cxx", "all"}
+	args = append(args, presetArgs...)
 	if runtime.GOOS == "windows" {
 		args = append(args, "SHELL=cmd.exe", ".SHELLFLAGS=/c")
 	}

@@ -27,6 +27,7 @@ type discovery struct {
 }
 
 type report struct {
+	BuildPreset   string            `json:"buildPreset,omitempty"`
 	ToolDiscovery *toolsReport      `json:"toolDiscovery,omitempty"`
 	SchemaVersion int               `json:"schemaVersion"`
 	Version       string            `json:"version"`
@@ -86,6 +87,13 @@ func inspect(root string, opts options, verify bool) report {
 	if err != nil {
 		r.Checks = append(r.Checks, check{"project", "CubeMX project", "error", err.Error(), "generateMakefile"})
 	} else {
+		effective, presetErr := applyBuildPreset(root, config{Project: p}, opts.preset)
+		if presetErr != nil {
+			r.Checks = append(r.Checks, check{"buildPreset", "Build preset", "error", presetErr.Error(), "editBuildPresets"})
+		} else {
+			p = effective.Project
+			r.BuildPreset = effective.Preset
+		}
 		r.Project = &p
 		r.Checks = append(r.Checks, check{"project", "CubeMX project", "ok", p.Target + " · " + p.Device, ""})
 	}

@@ -140,6 +140,28 @@ The native CLI and local tool paths are added under `.dauhuniec/`.
 Tasks, Cortex-Debug configurations, IntelliSense settings, and extension
 recommendations are merged into `.vscode/`. Unrelated settings and tasks are preserved.
 
+The generated files have separate roles:
+
+| File | Generated configuration |
+| --- | --- |
+| `settings.json` | Tool paths, one clangd server, semantic highlighting and Makefile workspace defaults. |
+| `tasks.json` | Native CLI tasks with an explicit `--project ${workspaceFolder}` argument; no shell interpolation. |
+| `launch.json` | Cortex-Debug Debug/Attach, selected ST-LINK validation and preset-aware ELF resolution by the extension. |
+| `c_cpp_properties.json` | Compilation database reference for the C/C++ extension; its IntelliSense engine stays disabled while clangd runs. |
+| `extensions.json` | clangd and Cortex-Debug recommendations merged with existing recommendations. |
+
+For Makefile projects without a root `CMakeLists.txt`, Configure pins
+`cmake.sourceDirectory` to `${workspaceFolder}`, disables
+`cmake.autoDetectSourceDirectory`, `cmake.configureOnOpen` and
+`cmake.configureOnEdit`, and enables `cmake.ignoreCMakeListsMissing` and
+`stm32cube-ide-build-cmake.ignoreCubeProjectDiscovery`. CMake files inside
+`Drivers/CMSIS` then do not trigger automatic project configuration or discovery
+prompts. Configure preserves CMake settings if a real root `CMakeLists.txt` exists.
+These settings apply only to this workspace folder; global settings stay unchanged.
+Open the CubeMX project itself as a VS Code workspace folder: a nested `.vscode/`
+directory is not automatically applied by an enclosing workspace.
+
+
 Original editor configuration files, including JSONC comments, are copied to
 `.dauhuniec/backups/vscode-<timestamp>/`. Updated JSON files are reformatted.
 Invalid JSON is not overwritten. Backups are intended for regular files and
@@ -147,8 +169,9 @@ directories without symbolic links.
 
 Source files, drivers, `.ioc`, the linker script, and the Makefile remain unchanged.
 The MCU is read from `.ioc`; flags, defines, and include paths come from the
-Makefile. Builds run with `DEBUG=1 OPT=-Og`; the ELF path comes from `TARGET`
-and `BUILD_DIR`.
+Makefile. The selected build preset supplies `DEBUG`, `OPT`, and extra flags;
+the default `debug` preset uses `DEBUG=1 OPT=-Og`. The ELF path combines `TARGET`,
+`BUILD_DIR`, the preset name and its flags hash.
 
 After changing peripherals, click **Generate Code** in CubeMX. Keep your logic
 inside `USER CODE` blocks. After changing the set of files, run Clean, then Build.
@@ -167,8 +190,11 @@ Configure Project selects one clangd language server: `clangd.enable = true`,
 Semantic highlighting is enabled. Global editor settings stay unchanged and
 previous workspace values are saved in the `.vscode/` backup.
 
-Dauhuniec installs the official **clangd** extension if missing. It offers to
-download the language server when no executable is available. To install or retry
+Dauhuniec installs or enables the official **clangd** extension before activation,
+including when it was previously disabled globally. `clangd.enable` in workspace
+settings alone does not enable a globally disabled extension.
+
+It offers to download the language server when no executable is available. To install or retry
 later, run **Dauhuniec: Install / Update clangd** from the Command Palette or
 Resources. An internet connection is needed for extension/server downloads;
 after installation, navigation works offline. For an existing offline installation,
@@ -335,7 +361,7 @@ pnpm run package
 ```
 
 Output: six CLIs in `bin/`, `SHA256SUMS`, and the installable
-`releases/dauhuniec-0.1.3.vsix`. No separate ZIP is created. Binaries,
+`releases/dauhuniec-0.1.5.vsix`. No separate ZIP is created. Binaries,
 dependencies, compiled files, and VSIX packages are excluded from Git.
 
 Extension sources are in `extension/src`; native logic is in the Go files under
@@ -420,3 +446,70 @@ Markdown opens in VS Code. During local development, PDFs and HTML open in the
 system viewer. In SSH/WSL/containers, files open through VS Code; a PDF viewer
 extension may be required. If a network or proxy blocks downloads by the
 extension, save the official PDF through a browser and open the local file.
+
+## Build presets and flags
+
+Use **Dauhuniec: Select Build Preset**, the preset name in the status bar, or
+**Build Preset** in the Project view. The selected preset is shared by Build,
+Build and Flash, Flash Firmware, Debug/Attach and the clangd compilation database.
+Debug uses the selected preset, so choose `debug` or `relwithdebinfo` when you
+need debug symbols. Built-ins work without a configuration file:
+
+| Preset | Debug symbols | Optimization |
+| --- | --- | --- |
+| `debug` (default) | Yes | `-Og` |
+| `release` | No | `-O2` |
+| `size` | No | `-Os` |
+| `relwithdebinfo` | Yes | `-O2` |
+
+Run **Dauhuniec: Edit Build Presets** to create/open `dauhuniec.json` in the
+CubeMX project root. This file can be committed and survives CubeMX regeneration.
+VS Code provides field completion and validation. Comments and trailing commas
+are accepted by the CLI. For example:
+
+```json
+{
+  "default_preset": "debug",
+  "presets": {
+    "debug": { "debug": true, "optimization": "-Og" },
+    "release": { "debug": false, "optimization": "-O2" },
+    "logging": {
+      "extends": "debug",
+      "build_flags": ["-DAPP_LOG_LEVEL=3", "-IExtra/Inc"],
+      "c_flags": ["-Wall"],
+      "cxx_flags": ["-std=gnu++17"],
+      "asm_flags": ["-DASSEMBLY_FEATURE=1"],
+      "link_flags": ["-Wl,--gc-sections"]
+    }
+  }
+}
+```
+
+`build_flags` appends to C and C++ flags; the other lists append to the respective
+Make variables. Values are Make recipe fragments, so quote paths containing
+spaces, for example `"-I\"Extra Includes\""`. Existing CPU flags, defines,
+include paths and linker script settings from the generated Makefile remain.
+A preset can inherit one other preset with `extends`: flag lists append to the
+parent's lists, while `debug` and `optimization` override the parent's values.
+An entry with a built-in name replaces that built-in definition. Without a
+parent, omitted `debug` and `optimization` values use `true` and `-Og`.
+
+CLI equivalents:
+
+```sh
+lon presets --project /path/to/project
+lon select-preset --preset release --project /path/to/project
+lon build --preset logging --project /path/to/project
+lon compdb --preset logging --project /path/to/project
+```
+
+`--preset` applies to a single build, clean, flash, upload, compdb, inspect or
+doctor command. Otherwise the locally selected preset in
+`.dauhuniec/build-preset.json` takes precedence over `default_preset`.
+Use Select Build Preset to recover if a locally selected custom preset is removed.
+
+Outputs use `<BUILD_DIR>/<preset>/<flags-hash>/`. Changing flags starts a fresh
+build; switching back reuses the matching output. Clean removes the active
+configuration's output. Existing firmware in the old flat build directory must
+be rebuilt before flashing. CubeMX's Makefile is not rewritten. After upgrading,
+run Configure CubeMX Project once to refresh the project-local CLI and tasks.

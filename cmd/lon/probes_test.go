@@ -90,8 +90,12 @@ func TestDispatchNeverFlashesAnUnselectedOrDisconnectedBoard(t *testing.T) {
 	}
 	data, _ := json.Marshal(config{Project: p, Tools: tools})
 	os.WriteFile(filepath.Join(state, "tools.json"), data, 0644)
-	os.MkdirAll(filepath.Dir(elfPath(root, p)), 0755)
-	os.WriteFile(elfPath(root, p), []byte("ELF"), 0644)
+	effective, err := applyBuildPreset(root, config{Project: p}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.MkdirAll(filepath.Dir(elfPath(root, effective.Project)), 0755)
+	os.WriteFile(elfPath(root, effective.Project), []byte("ELF"), 0644)
 	os.WriteFile(listing, []byte(twoProbeListing), 0644)
 	if err := dispatch([]string{"upload", "--project", root}); err == nil {
 		t.Fatal("flashed before selecting between identical boards")
@@ -108,6 +112,22 @@ func TestDispatchNeverFlashesAnUnselectedOrDisconnectedBoard(t *testing.T) {
 	command, _ := os.ReadFile(trace)
 	if !strings.Contains(string(command), "sn=AAAAAAAA\n") || strings.Contains(string(command), "BBBBBBBB") {
 		t.Fatal(string(command))
+	}
+	if !strings.Contains(string(command), elfPath(root, effective.Project)) {
+		t.Fatal("uploaded wrong preset", string(command))
+	}
+	release, err := applyBuildPreset(root, config{Project: p}, "release")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.MkdirAll(filepath.Dir(elfPath(root, release.Project)), 0755)
+	os.WriteFile(elfPath(root, release.Project), []byte("release ELF"), 0644)
+	if err := dispatch([]string{"upload", "--project", root, "--preset", "release"}); err != nil {
+		t.Fatal(err)
+	}
+	command, _ = os.ReadFile(trace)
+	if !strings.Contains(string(command), elfPath(root, release.Project)) || !strings.Contains(string(command), "sn=AAAAAAAA") {
+		t.Fatal("upload ignored explicit preset or target", string(command))
 	}
 	os.Remove(trace)
 	os.WriteFile(listing, []byte("ST-Link Probe 0:\nST-LINK SN : BBBBBBBB\nBoard Name : NUCLEO-C071RB\n"), 0644)

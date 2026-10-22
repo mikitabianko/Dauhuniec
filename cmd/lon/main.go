@@ -20,7 +20,7 @@ import (
 
 var assets = dauhuniec.Assets
 
-const version = "0.1.4"
+const version = "0.1.5"
 const stateDir = ".dauhuniec"
 const previousStateDir = ".lon"
 const legacyStateDir = ".stm32-codeready"
@@ -33,12 +33,15 @@ type project struct {
 }
 
 type config struct {
+	Build     *buildPreset             `json:"-"`
+	Preset    string                   `json:"-"`
 	Selection map[string]toolCandidate `json:"selection,omitempty"`
 	Project   project                  `json:"project"`
 	Tools     map[string]string        `json:"tools"`
 }
 
 type options struct {
+	preset      string
 	probeSerial string
 	project     string
 	ide         string
@@ -63,6 +66,9 @@ func dispatch(args []string) error {
 lon setup [PROJECT] [--cube-ide PATH] [--make PATH]
 lon inspect|doctor [--project PATH] [--json] [--cube-ide PATH] [--make PATH]
 lon build|clean|flash|upload|list-probes|compdb [--project PATH]
+lon presets [--project PATH]
+lon select-preset --preset NAME [--project PATH]
+Build, clean, flash, upload and compdb accept --preset NAME.
 lon probes --json [--project PATH]
 lon select-probe --probe-serial SERIAL [--project PATH] [--json]
 lon serial-list
@@ -90,7 +96,7 @@ Without a project path, use the installed project or the current directory.`)
 		return serialCommand(action, args[1:], os.Stdin, os.Stdout)
 	}
 	switch action {
-	case "setup", "compdb", "inspect", "build", "clean", "doctor", "flash", "upload", "list-probes", "probes", "select-probe":
+	case "setup", "compdb", "inspect", "build", "clean", "doctor", "flash", "upload", "list-probes", "probes", "select-probe", "presets", "select-preset":
 	default:
 		return fmt.Errorf("unknown command %q; use --help", action)
 	}
@@ -101,6 +107,12 @@ Without a project path, use the installed project or the current directory.`)
 	root, err := projectRoot(opts.project)
 	if err != nil {
 		return err
+	}
+	if action == "presets" || action == "select-preset" {
+		return presetsCommand(root, action, opts.preset)
+	}
+	if opts.preset != "" && !containsTool([]string{"build", "clean", "flash", "upload", "compdb", "inspect", "doctor"}, action) {
+		return errors.New("--preset is only supported for build, clean, flash, upload, compdb, inspect and doctor")
 	}
 	if opts.json && action != "inspect" && action != "doctor" && action != "probes" && action != "select-probe" {
 		return errors.New("--json is supported by inspect, doctor, probes and select-probe")
@@ -154,6 +166,12 @@ Without a project path, use the installed project or the current directory.`)
 		}
 		return json.NewEncoder(os.Stdout).Encode(report)
 	}
+	if containsTool([]string{"build", "clean", "flash", "upload", "compdb"}, action) {
+		cfg, err = applyBuildPreset(root, cfg, opts.preset)
+		if err != nil {
+			return err
+		}
+	}
 	if action == "compdb" || action == "build" || action == "flash" {
 		if err := generateCompilationDatabase(root, cfg); err != nil {
 			return err
@@ -177,6 +195,12 @@ func parseOptions(args []string, setup bool) (options, error) {
 	var opts options
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
+		case "--preset":
+			i++
+			if i == len(args) || !presetName.MatchString(args[i]) || opts.preset != "" {
+				return opts, errors.New("specify one --preset NAME using letters, numbers, underscores or hyphens")
+			}
+			opts.preset = args[i]
 		case "--action":
 			i++
 			if i == len(args) || actionRequirements[args[i]] == nil {
@@ -521,12 +545,16 @@ func setup(root string, opts options) error {
 	if err := copyFile(exe, filepath.Join(state, binaryName()), 0755); err != nil {
 		return err
 	}
+	effective, err := applyBuildPreset(root, cfg, "")
+	if err != nil {
+		return err
+	}
 	if cfg.Tools["gcc"] != "" && cfg.Tools["make"] != "" {
-		if err := generateCompilationDatabase(root, cfg); err != nil {
+		if err := generateCompilationDatabase(root, effective); err != nil {
 			return err
 		}
 	}
-	if err := configureVSCode(root, plugins, cfg); err != nil {
+	if err := configureVSCode(root, plugins, effective); err != nil {
 		return err
 	}
 	if err := writeJSON(filepath.Join(state, "tools.json"), cfg); err != nil {
@@ -553,7 +581,7 @@ func setup(root string, opts options) error {
 	if err := os.WriteFile(filepath.Join(state, "GO-LICENSE.txt"), license, 0644); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(state, ".gitignore"), []byte("tools.json\ntarget.json\nbackups/\nlon\nlon.exe\ncompile_commands.json\n.cache/\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(state, ".gitignore"), []byte("tools.json\ntarget.json\nbuild-preset.json\n.preset-*.mk\nbackups/\nlon\nlon.exe\ncompile_commands.json\n.cache/\n"), 0644); err != nil {
 		return err
 	}
 	if err := createProjectGitignore(root, p); err != nil {

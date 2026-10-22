@@ -200,6 +200,49 @@ func migrateSettings(old map[string]any) {
 	delete(old, "dauhuniec.shell")
 }
 
+func configureWorkspaceSettings(root string, cfg config, settings map[string]any, previous map[string]string) error {
+	data, err := assets.ReadFile("templates/vscode/settings.json")
+	if err != nil {
+		return err
+	}
+	var defaults map[string]any
+	if err := json.Unmarshal(data, &defaults); err != nil {
+		return err
+	}
+	migrateSettings(settings)
+	hasCMakeProject := regularFile(filepath.Join(root, "CMakeLists.txt"))
+	for key, value := range defaults {
+		// Vendor CMakeLists.txt files do not make a CubeMX Makefile project a
+		// CMake project. Leave real root CMake projects' configuration alone.
+		if hasCMakeProject && (strings.HasPrefix(key, "cmake.") || key == "stm32cube-ide-build-cmake.ignoreCubeProjectDiscovery") {
+			continue
+		}
+		if language, ok := value.(map[string]any); ok {
+			merged, ok := settings[key].(map[string]any)
+			if !ok {
+				merged = map[string]any{}
+			}
+			for name, setting := range language {
+				merged[name] = setting
+			}
+			settings[key] = merged
+		} else {
+			settings[key] = value
+		}
+	}
+	settings["clangd.arguments"] = clangdArguments(root, cfg.Tools["gcc"], settings["clangd.arguments"])
+	for key, value := range cfg.Tools {
+		if chosen, ok := settings["dauhuniec."+key].(string); ok && chosen != "" && chosen != previous[key] {
+			continue
+		}
+		settings["dauhuniec."+key] = value
+	}
+	settings["dauhuniec.runner"] = filepath.Join(root, stateDir, binaryName())
+	settings["dauhuniec.programmerDir"] = filepath.Dir(cfg.Tools["programmer"])
+	settings["dauhuniec.elf"], settings["dauhuniec.device"] = elfPath(root, cfg.Project), cfg.Project.Device
+	return nil
+}
+
 func configureVSCode(root, plugins string, cfg config) error {
 	destination := filepath.Join(root, ".vscode")
 	previous := savedTools(root)
@@ -211,32 +254,9 @@ func configureVSCode(root, plugins string, cfg config) error {
 			return err
 		}
 		if name == "settings.json" {
-			migrateSettings(old)
-			// Keep one language server and use the database expanded from Make recipes.
-			old["C_Cpp.intelliSenseEngine"] = "disabled"
-			old["clangd.enable"] = true
-			old["clangd.enableCodeCompletion"] = true
-			old["clangd.enableHover"] = true
-			old["stm32cube-ide-clangd.enable"] = false
-			old["editor.semanticHighlighting.enabled"] = true
-			for _, language := range []string{"[c]", "[cpp]"} {
-				settings, ok := old[language].(map[string]any)
-				if !ok {
-					settings = map[string]any{}
-				}
-				settings["editor.semanticHighlighting.enabled"] = true
-				old[language] = settings
+			if err := configureWorkspaceSettings(root, cfg, old, previous); err != nil {
+				return err
 			}
-			old["clangd.arguments"] = clangdArguments(root, cfg.Tools["gcc"], old["clangd.arguments"])
-			for key, value := range cfg.Tools {
-				if chosen, ok := old["dauhuniec."+key].(string); ok && chosen != "" && chosen != previous[key] {
-					continue
-				}
-				old["dauhuniec."+key] = value
-			}
-			old["dauhuniec.runner"] = filepath.Join(root, stateDir, binaryName())
-			old["dauhuniec.programmerDir"] = filepath.Dir(cfg.Tools["programmer"])
-			old["dauhuniec.elf"], old["dauhuniec.device"] = elfPath(root, cfg.Project), cfg.Project.Device
 			documents[name] = old
 			continue
 		}

@@ -35,6 +35,11 @@ export function testToolbar(): void {
     assert.deepEqual(visible(),['home','cubeMX','build','serialMonitor'],'missing optional debug/programming tools do not hide Build');
     toolbar.update({ projectCount: 1, report });
     assert.deepEqual(visible(), ['home', 'cubeMX', 'build', 'upload', 'flash', 'debug', 'serialMonitor']);
+    toolbar.update({ projectCount: 1, report: { ...report, buildPreset: 'release' } });
+    assert.ok(visible().includes('buildPreset'));
+    assert.equal(items.get('buildPreset')!.item.text, '$(layers) release');
+    assert.equal(items.get('buildPreset')!.item.command, 'dauhuniec.selectBuildPreset');
+    toolbar.update({ projectCount: 1, report });
     assert.equal(items.get('home')!.item.text, '$(home)');
     assert.match(String(items.get('home')!.item.tooltip), /STM32C071RBT6/);
     assert.match(String(items.get('home')!.item.tooltip), /TestExtension/);

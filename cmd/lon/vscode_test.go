@@ -3,9 +3,100 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestGeneratedWorkspaceKeepsMakefileAsBuildSystem(t *testing.T) {
+	for _, rootCMake := range []bool{false, true} {
+		name := "vendor CMake only"
+		if rootCMake {
+			name = "root CMake project"
+		}
+		t.Run(name, func(t *testing.T) {
+			root := fixture(t)
+			for _, dir := range []string{stateDir, ".vscode", "Drivers/CMSIS"} {
+				if err := os.MkdirAll(filepath.Join(root, dir), 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(root, "Drivers/CMSIS/CMakeLists.txt"), []byte("project(CMSIS)\n"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			if rootCMake {
+				if err := os.WriteFile(filepath.Join(root, "CMakeLists.txt"), []byte("project(App)\n"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			settingsPath := filepath.Join(root, ".vscode/settings.json")
+			original := map[string]any{
+				"cmake.sourceDirectory":                                "${workspaceFolder}/Drivers/CMSIS",
+				"cmake.configureOnOpen":                                true,
+				"cmake.configureOnEdit":                                true,
+				"cmake.autoDetectSourceDirectory":                      true,
+				"cmake.ignoreCMakeListsMissing":                        false,
+				"stm32cube-ide-build-cmake.ignoreCubeProjectDiscovery": false,
+				"cmake.generator":                                      "Ninja",
+				"editor.fontSize":                                      17,
+				"[c]":                                                  map[string]any{"editor.tabSize": 4},
+				"[cpp]":                                                map[string]any{"editor.formatOnSave": true},
+			}
+			if err := writeJSON(settingsPath, original); err != nil {
+				t.Fatal(err)
+			}
+			p, err := readProject(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var first map[string]any
+			for attempt := 0; attempt < 2; attempt++ {
+				if err := configureVSCode(root, "no-plugins", config{Project: p}); err != nil {
+					t.Fatal(err)
+				}
+				settings, err := readObject(settingsPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				want := map[string]any{
+					"cmake.sourceDirectory":                                "${workspaceFolder}",
+					"cmake.configureOnOpen":                                false,
+					"cmake.configureOnEdit":                                false,
+					"cmake.autoDetectSourceDirectory":                      false,
+					"cmake.ignoreCMakeListsMissing":                        true,
+					"stm32cube-ide-build-cmake.ignoreCubeProjectDiscovery": true,
+				}
+				for key, value := range want {
+					if rootCMake {
+						value = original[key]
+					}
+					if settings[key] != value {
+						t.Fatalf("%s: want %v, got %v", key, value, settings[key])
+					}
+				}
+				if settings["cmake.generator"] != "Ninja" || settings["editor.fontSize"] != float64(17) || settings["[c]"].(map[string]any)["editor.tabSize"] != float64(4) || settings["[cpp]"].(map[string]any)["editor.formatOnSave"] != true {
+					t.Fatal("unrelated build or language preferences lost", settings)
+				}
+				if attempt == 0 {
+					first = settings
+				} else if !reflect.DeepEqual(first, settings) {
+					t.Fatal("repeated generation changed workspace settings")
+				}
+			}
+			tasks, err := readObject(filepath.Join(root, ".vscode/tasks.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, entry := range tasks["tasks"].([]any) {
+				task := entry.(map[string]any)
+				args := task["args"].([]any)
+				if len(args) != 3 || args[1] != "--project" || args[2] != "${workspaceFolder}" || task["type"] != "process" {
+					t.Fatalf("task is not pinned to its project: %+v", task)
+				}
+			}
+		})
+	}
+}
 
 func TestConfigureRestoresIntelliSenseAndBacksUpPreferences(t *testing.T) {
 	for _, engine := range []string{"", "default", "disabled", "Tag Parser"} {

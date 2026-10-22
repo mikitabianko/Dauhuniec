@@ -80,7 +80,7 @@ test('clangd diagnostics distinguish missing installation, disabled server and c
   assert.match(intelliSenseChecks('disabled', true, true)[0].message, /second STM32 clangd/);
 });
 
-test('clangd installer installs extension before activation and delegates server downloads; failures can be retried', async () => {
+test('clangd installer requests enablement even when installed, then activates and delegates downloads; failures can be retried', async () => {
   const { ensureClangd } = await import('../intelliSense');
   const events: string[] = [];
   let installed = false;
@@ -94,7 +94,7 @@ test('clangd installer installs extension before activation and delegates server
   assert.deepEqual(events, ['install', 'activate']);
   events.length = 0;
   await ensureClangd(installer, true);
-  assert.deepEqual(events, ['activate', 'download']);
+  assert.deepEqual(events, ['install', 'activate', 'download']);
   installed = false;
   await assert.rejects(ensureClangd({ ...installer, installExtension: async () => { throw new Error('offline'); } }), /offline/);
   await assert.rejects(ensureClangd({ ...installer, installExtension: async () => {} }), /Enable the clangd extension/);

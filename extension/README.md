@@ -243,15 +243,21 @@ needs a graphical session there.
 | `.dauhuniec/backups/vscode-<timestamp>/` | A copy of the existing `.vscode/` directory before configuration, when it is nonempty. |
 | `.vscode/` | Merged `settings.json`, `tasks.json`, `launch.json`, `c_cpp_properties.json` and `extensions.json`. Unrelated entries are preserved; updated JSON is reformatted and comments are removed. |
 | `.gitignore` | Creates or updates a marked Dauhuniec block for the Makefile's build directory, local Dauhuniec and VS Code settings, serial recordings, logs and OS files. Rules outside the block are preserved. |
-| Makefile's `BUILD_DIR` (usually `build/`) | Compiler output during builds; **Clean Build** deletes this directory without invoking `make clean`. |
+| `<BUILD_DIR>/<preset>/<flags-hash>/` | Compiler output for each configuration; **Clean Build** deletes the active configuration without invoking `make clean`. |
 | Serial log path chosen by you | Timestamped RX/TX records appended when logging is enabled. |
 
 **Dauhuniec setup does not rewrite `.ioc`, source files, drivers, linker scripts
 or the Makefile.** USER CODE focus changes editor folding only. CubeMX code
 regeneration remains a separate action: keep application logic inside its
-`USER CODE` blocks. Builds invoke `make -j2 GCC_PATH= PREFIX=arm-none-eabi- DEBUG=1 OPT=-Og all`,
-using the detected compiler and Make directories on `PATH`. Windows builds use
-`cmd.exe`; the CLI creates the output directory before invoking Make.
+`USER CODE` blocks. Builds invoke Make with the selected preset's debug,
+optimization and extra flags, using the detected compiler and Make directories
+on `PATH`. The CLI creates the complete output directory before invoking Make;
+Windows builds use `cmd.exe`.
+
+For Makefile projects without a root `CMakeLists.txt`, generated workspace settings
+disable CMake auto-detection/configuration and STM32 CMake discovery prompts, so
+CMSIS library CMake files do not take over the workspace. User tasks, unrelated
+editor preferences and real root CMake configurations are preserved.
 
 Downloaded official PDF manuals are stored in VS Code's extension global storage,
 outside the firmware project. Serial port/speed and USER CODE focus choices are
@@ -479,3 +485,12 @@ The package includes Go runtime and dependency license notices. Official manuals
 remain subject to their publishers' terms.
 
 Tool discovery now runs through `lon tools --json --diagnostics`, including CubeMX without a project. Invalid user paths offer discovered alternatives; managed paths recover automatically. Use **Dauhuniec: Export Diagnostic Report** to save a redacted support ZIP. See [discovery, recovery and report details](docs/tool-discovery.md).
+
+## Build presets
+
+Choose **Dauhuniec: Select Build Preset** or click the preset in the status bar.
+Built-ins: `debug`, `release`, `size`, `relwithdebinfo`. Use
+**Dauhuniec: Edit Build Presets** for custom compiler/linker flags and inheritance
+in the project’s `dauhuniec.json`. Build, flash, debug and clangd share the preset;
+outputs are isolated by preset and flags. CLI: `lon build --preset release`.
+See the [build preset guide](https://github.com/mikitabianko/Dauhuniec/blob/master/docs/guide.md#build-presets-and-flags) for configuration and examples.

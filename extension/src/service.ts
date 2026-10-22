@@ -17,6 +17,7 @@ export interface Check {
   action?: string;
 }
 export interface Report {
+  buildPreset?: string;
   schemaVersion: 1;
   version: string;
   root: string;

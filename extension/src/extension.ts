@@ -251,9 +251,11 @@ export async function activate(context: vscode.ExtensionContext) {
     }
     const presence: Record<string, boolean> = {};
     if (root)
-      for (const name of ['Makefile', '.vscode/launch.json', '.dauhuniec/tools.json', ...(current?.project ? [current.project.ioc] : [])])
+      for (const name of ['Makefile', 'CMakeLists.txt', '.vscode/launch.json', '.dauhuniec/tools.json', ...(current?.project ? [current.project.ioc] : [])])
         presence[name] = await fs.stat(path.join(root, name)).then(s => s.isFile(), () => false);
-    for (const [section, key] of [['C_Cpp', 'intelliSenseEngine'], ['clangd', 'enable'], ['stm32cube-ide-clangd', 'enable']]) {
+    for (const [section, key] of [['C_Cpp', 'intelliSenseEngine'], ['clangd', 'enable'], ['stm32cube-ide-clangd', 'enable'],
+      ['cmake', 'sourceDirectory'], ['cmake', 'autoDetectSourceDirectory'], ['cmake', 'configureOnOpen'],
+      ['cmake', 'configureOnEdit'], ['cmake', 'ignoreCMakeListsMissing'], ['stm32cube-ide-build-cmake', 'ignoreCubeProjectDiscovery']]) {
       const language = vscode.workspace.getConfiguration(section, root ? vscode.Uri.file(root) : undefined);
       const value = language.inspect(key);
       settings[`${section}.${key}`] = { effective: language.get(key), source: value?.workspaceFolderValue !== undefined ? 'workspaceFolder' : value?.workspaceValue !== undefined ? 'workspace' : value?.globalValue !== undefined ? 'user' : 'default' };
@@ -354,7 +356,9 @@ export async function activate(context: vscode.ExtensionContext) {
       { label: report.project?.target ?? path.basename(root), description: report.project?.device, detail: root, icon: 'circuit-board', command: 'dauhuniec.selectProject' },
       ...(report.configured ? [targetNode(root)] : []),
       { label: report.ready ? 'Ready for VS Code' : 'Setup needs attention', icon: report.ready ? 'pass' : 'warning', command: report.ready ? 'dauhuniec.check' : 'dauhuniec.configure', root },
-      ...issues.map(check => ({ label: check.label, description: check.message, detail: check.message, root, icon: check.status === 'error' ? 'error' : 'warning', command: check.action === 'installClangd' ? 'dauhuniec.installClangd' : check.action === 'selectCubeIDE' ? 'dauhuniec.chooseIDE' : check.action === 'selectMake' ? 'dauhuniec.chooseMake' : 'dauhuniec.configure' })),
+      ...issues.map(check => ({ label: check.label, description: check.message, detail: check.message, root, icon: check.status === 'error' ? 'error' : 'warning', command: check.action === 'editBuildPresets' ? 'dauhuniec.editBuildPresets' : check.action === 'installClangd' ? 'dauhuniec.installClangd' : check.action === 'selectCubeIDE' ? 'dauhuniec.chooseIDE' : check.action === 'selectMake' ? 'dauhuniec.chooseMake' : 'dauhuniec.configure' })),
+      { label: 'Build Preset', description: report.buildPreset ?? 'Invalid configuration', command: 'dauhuniec.selectBuildPreset', icon: 'layers', root },
+      action('Edit Build Presets', 'dauhuniec.editBuildPresets', 'edit'),
       action('Configure Project', 'dauhuniec.configure', 'tools'),
       ...(issues.some(check => check.action === 'selectCubeIDE' || check.action === 'selectMake')
         ? [action('Install Tools / Official Downloads', 'dauhuniec.installTools', 'cloud-download')] : []),
@@ -496,7 +500,7 @@ export async function activate(context: vscode.ExtensionContext) {
     trusted();
     await ensureClangd({
       installed: () => !!vscode.extensions.getExtension(clangdExtension),
-      installExtension: () => vscode.commands.executeCommand('workbench.extensions.installExtension', clangdExtension),
+      installExtension: () => vscode.commands.executeCommand('workbench.extensions.installExtension', clangdExtension, { enable: true }),
       activate: async () => {
         const extension = vscode.extensions.getExtension(clangdExtension);
         if (!extension) throw new Error('clangd installation did not finish. Enable the extension and retry.');
@@ -846,6 +850,47 @@ export async function activate(context: vscode.ExtensionContext) {
     }));
   }
 
+  async function selectBuildPreset(argument?: unknown): Promise<void> {
+    trusted();
+    const root = await pickProject(argument);
+    if (!root) return;
+    if (active.has(root) || vscode.debug.activeDebugSession) throw new Error('Wait for the current task or debug session to finish before changing the build preset.');
+    const result = await execute(binary, ['presets', '--project', root], root);
+    const presets = JSON.parse(result) as { active: string; presets: string[]; selectionError?: string };
+    const picked = await vscode.window.showQuickPick([
+      ...presets.presets.map(name => ({ label: name, description: name === presets.active ? 'Active' : '', preset: name })),
+      { label: '$(edit) Edit Build Presets…', description: 'dauhuniec.json', preset: '' }
+    ], { title: 'Dauhuniec · Build Preset', placeHolder: presets.selectionError ?? 'Choose the configuration for build, flash and debug' });
+    if (!picked) return;
+    if (!picked.preset) { await editBuildPresets(root); return; }
+    if (active.has(root) || vscode.debug.activeDebugSession) throw new Error('Wait for the current task or debug session to finish before changing the build preset.');
+    await execute(binary, ['select-preset', '--preset', picked.preset, '--project', root], root);
+    databaseDirty.add(root);
+    await refresh();
+  }
+
+  async function editBuildPresets(argument?: unknown): Promise<void> {
+    trusted();
+    const root = await pickProject(argument);
+    if (!root) return;
+    const file = vscode.Uri.file(path.join(root, 'dauhuniec.json'));
+    try { await fs.access(file.fsPath); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      await fs.writeFile(file.fsPath, JSON.stringify({
+        default_preset: 'debug',
+        presets: {
+          debug: { debug: true, optimization: '-Og' },
+          release: { debug: false, optimization: '-O2' },
+          custom: { extends: 'debug', build_flags: ['-DAPP_LOG_LEVEL=3'], c_flags: [], cxx_flags: [], asm_flags: [], link_flags: [] }
+        }
+      }, null, 2) + '\n', { flag: 'wx' });
+    }
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file));
+  }
+
+  register('selectBuildPreset', selectBuildPreset);
+  register('editBuildPresets', editBuildPresets);
   register('exportDiagnosticReport',exportDiagnosticReport);
   register('chooseCubeMX',root=>chooseTool('cubeMX',root));
   register('moreActions', moreActions);
@@ -867,6 +912,11 @@ export async function activate(context: vscode.ExtensionContext) {
         if (configuration.serverPath !== undefined) {
           configuration.serverpath = configuration.serverpath || configuration.serverPath;
           delete configuration.serverPath;
+        }
+        if (configuration.executable === '${config:dauhuniec.elf}') {
+          const report = await inspect(binary, root, options(root));
+          if (!report.project || !report.buildPreset) throw new Error('Fix the build preset configuration before debugging.');
+          configuration.executable = path.join(root, report.project.build_dir, `${report.project.target}.elf`);
         }
         configuration.__dauhuniecToolReferences = [];
         for (const [field, key, setting] of [['serverpath', 'server', 'server'], ['gdbPath', 'gdb', 'gdb'], ['objdumpPath', 'objdump', 'objdump'], ['nmPath', 'nm', 'nm'], ['stm32cubeprogrammer', 'programmer', 'programmerDir']])
@@ -1025,18 +1075,19 @@ export async function activate(context: vscode.ExtensionContext) {
   register('flash', root => commandTask('flash', root)); register('clean', root => commandTask('clean', root));
   register('probes', root => commandTask('list-probes', root)); register('debug', debug);
   register('documentation', documentation);
-  register('installClangd', () => installClangd());
+  register('installClangd', argument => installClangd(argument !== false));
   register('installTools', installTools);
   register('windowsGuide', windowsGuide);
   register('openIOC', openIOC); register('guide', guide); register('logs', () => output.show());
   register('chooseIDE', root => chooseTool('cubeIDE', root)); register('chooseMake', root => chooseTool('make', root));
-  const watcher = vscode.workspace.createFileSystemWatcher('**/{*.ioc,Makefile,tools.json}');
+  const watcher = vscode.workspace.createFileSystemWatcher('**/{*.ioc,Makefile,tools.json,dauhuniec.json,build-preset.json}');
   const scheduleRefresh = () => {
     if (refreshTimer) clearTimeout(refreshTimer);
     refreshTimer = setTimeout(() => { void refresh().catch(error => output.appendLine(String(error))); }, 400);
   };
-  const sourceWatcher = vscode.workspace.createFileSystemWatcher('**/{Makefile,*.mk,*.c,*.C,*.cc,*.cpp,*.cxx}');
+  const sourceWatcher = vscode.workspace.createFileSystemWatcher('**/{Makefile,*.mk,*.c,*.C,*.cc,*.cpp,*.cxx,dauhuniec.json,build-preset.json}');
   const updateDatabase = (uri: vscode.Uri) => {
+    if (path.basename(uri.fsPath).startsWith('.preset-')) return;
     if (selected && (uri.fsPath === selected || uri.fsPath.startsWith(selected + path.sep))) {
       databaseDirty.add(selected);
       scheduleRefresh();
@@ -1044,7 +1095,7 @@ export async function activate(context: vscode.ExtensionContext) {
   };
   context.subscriptions.push(sourceWatcher,
     sourceWatcher.onDidCreate(updateDatabase), sourceWatcher.onDidDelete(updateDatabase),
-    sourceWatcher.onDidChange(uri => { if (path.basename(uri.fsPath) === 'Makefile' || uri.fsPath.endsWith('.mk')) updateDatabase(uri); }));
+    sourceWatcher.onDidChange(uri => { if (path.basename(uri.fsPath) === 'Makefile' || uri.fsPath.endsWith('.mk') || ['dauhuniec.json', 'build-preset.json'].includes(path.basename(uri.fsPath))) updateDatabase(uri); }));
   context.subscriptions.push(watcher, watcher.onDidChange(scheduleRefresh), watcher.onDidCreate(scheduleRefresh), watcher.onDidDelete(scheduleRefresh),
     vscode.workspace.onDidChangeWorkspaceFolders(scheduleRefresh), vscode.workspace.onDidChangeConfiguration(event => { if (['dauhuniec', 'C_Cpp', 'clangd', 'stm32cube-ide-clangd'].some(section => event.affectsConfiguration(section))) scheduleRefresh(); }),
     { dispose: () => { if (refreshTimer) clearTimeout(refreshTimer); } });

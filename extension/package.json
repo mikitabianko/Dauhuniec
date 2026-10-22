@@ -3,7 +3,7 @@
   "displayName": "Dauhuniec",
   "icon": "media/icon.png",
   "description": "Dauhuniec: build, flash and debug STM32 CubeMX projects in VS Code with the lon CLI.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "dauhuniec",
   "license": "MIT",
   "repository": {
@@ -246,6 +246,18 @@
         "title": "Install / Update clangd",
         "category": "Dauhuniec",
         "icon": "$(cloud-download)"
+      },
+      {
+        "command": "dauhuniec.selectBuildPreset",
+        "title": "Select Build Preset",
+        "category": "Dauhuniec",
+        "icon": "$(layers)"
+      },
+      {
+        "command": "dauhuniec.editBuildPresets",
+        "title": "Edit Build Presets",
+        "category": "Dauhuniec",
+        "icon": "$(edit)"
       }
     ],
     "viewsContainers": {
@@ -462,6 +474,12 @@
           "description": "Additional local documentation folders (for example an STM32Cube firmware package). Absolute paths or paths relative to the selected project. PDF, Markdown and HTML files are indexed when opening Documentation; up to 200 files per folder."
         }
       }
-    }
+    },
+    "jsonValidation": [
+      {
+        "fileMatch": "dauhuniec.json",
+        "url": "./schemas/build-presets.schema.json"
+      }
+    ]
   }
 }

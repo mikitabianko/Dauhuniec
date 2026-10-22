@@ -20,11 +20,11 @@ fs.mkdirSync(path.join(userData, 'User'), { recursive: true });
 fs.writeFileSync(path.join(userData, 'User/settings.json'), JSON.stringify({
   'security.workspace.trust.enabled': false, 'workbench.startupEditor': 'none',
   'window.restoreWindows': 'none', 'update.mode': 'none',
-  ...(process.argv.includes('--clangd') ? { 'clangd.path': process.env.DAUHUNIEC_CLANGD || 'clangd', 'C_Cpp.intelliSenseEngine': 'default' } : {}),
+  ...((process.argv.includes('--clangd') || process.argv.includes('--navigation')) ? { 'clangd.path': process.env.DAUHUNIEC_CLANGD || 'clangd', 'C_Cpp.intelliSenseEngine': 'default' } : {}),
   'chat.disableAIFeatures': true, 'extensions.ignoreRecommendations': true,
   'extensions.autoCheckUpdates': false, 'extensions.autoUpdate': false, 'telemetry.telemetryLevel': 'off'
 }));
-if (process.argv.includes('--clangd')) {
+if (process.argv.includes('--clangd') || process.argv.includes('--navigation')) {
   const clangd = process.env.DAUHUNIEC_CLANGD_EXTENSION;
   if (!clangd || !fs.existsSync(path.join(clangd, 'package.json'))) throw new Error('Set DAUHUNIEC_CLANGD_EXTENSION to an installed official clangd extension for this isolated host test.');
   fs.mkdirSync(path.join(profile, 'extensions'), {recursive:true});
@@ -59,7 +59,7 @@ const env = { ...process.env };
 delete env.ELECTRON_RUN_AS_NODE;
 console.log('Isolated VS Code profile:', profile);
 const child = spawn(executable, ['--user-data-dir', userData, '--extensions-dir', path.join(profile, 'extensions'),
-  '--extensionDevelopmentPath', extension, ...(process.argv.includes('--persist-history') ? [] : ['--extensionTestsPath', path.join(extension, process.argv.includes('--clangd') ? 'dist/test/clangdHost.js' : process.argv.includes('--tool-isolation') ? 'dist/test/toolIsolationHost.js' : process.argv.includes('--tool-managed') ? 'dist/test/toolManagedRecoveryHost.js' : process.argv.includes('--tool-debug') ? 'dist/test/toolDebugHost.js' : process.argv.includes('--tool-recovery') ? 'dist/test/toolRecoveryHost.js' : process.argv.includes('--targets-startup') ? 'dist/test/targetBoardStartupHost.js' : process.argv.includes('--targets') ? 'dist/test/targetBoardHost.js' : process.argv.includes('--serial') ? 'dist/test/serialMonitorHost.js' : process.argv.includes('--cubemx') ? 'dist/test/cubeMXHost.js' : process.argv.includes('--focus') ? 'dist/test/userCodeHost.js' : 'dist/test/host.js')]),
+  '--extensionDevelopmentPath', extension, ...(process.argv.includes('--persist-history') ? [] : ['--extensionTestsPath', path.join(extension, process.argv.includes('--navigation') ? 'dist/test/navigationHost.js' : process.argv.includes('--presets') ? 'dist/test/buildPresetsHost.js' : process.argv.includes('--clangd') ? 'dist/test/clangdHost.js' : process.argv.includes('--tool-isolation') ? 'dist/test/toolIsolationHost.js' : process.argv.includes('--tool-managed') ? 'dist/test/toolManagedRecoveryHost.js' : process.argv.includes('--tool-debug') ? 'dist/test/toolDebugHost.js' : process.argv.includes('--tool-recovery') ? 'dist/test/toolRecoveryHost.js' : process.argv.includes('--targets-startup') ? 'dist/test/targetBoardStartupHost.js' : process.argv.includes('--targets') ? 'dist/test/targetBoardHost.js' : process.argv.includes('--serial') ? 'dist/test/serialMonitorHost.js' : process.argv.includes('--cubemx') ? 'dist/test/cubeMXHost.js' : process.argv.includes('--focus') ? 'dist/test/userCodeHost.js' : 'dist/test/host.js')]),
   '--disable-workspace-trust', '--skip-welcome', '--skip-release-notes', '--disable-gpu', '--new-window', path.resolve(project)],
   { env, stdio: 'inherit' });
 const timeout = setTimeout(() => { console.error('Extension Host test timed out.'); child.kill(); }, 120000);

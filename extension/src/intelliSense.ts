@@ -24,7 +24,9 @@ interface ClangdInstaller {
 
 /** The official extension owns server downloads, platform selection and updates. */
 export async function ensureClangd(installer: ClangdInstaller, download = false): Promise<void> {
-  if (!installer.installed()) await installer.installExtension();
+  // VS Code can expose the manifest of a disabled extension. Always ask the
+  // host to install or enable it before activation, including on later retries.
+  await installer.installExtension();
   if (!installer.installed()) throw new Error('Enable the clangd extension in this workspace, then retry.');
   await installer.activate();
   if (download) await installer.downloadServer();
