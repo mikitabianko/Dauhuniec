@@ -16,7 +16,13 @@ func TestCompilationDatabaseExpandsMakeAndPreservesPreviousOnFailure(t *testing.
 	if err != nil {
 		t.Skip("Make unavailable")
 	}
-	root := filepath.Join(t.TempDir(), "project ü [test] Кириллица")
+	projectName := "project ü [test] Кириллица"
+	if runtime.GOOS == "windows" {
+		// The runner's native Make cannot readdir Unicode working directories.
+		// Keep spaces and brackets here; exercise Unicode in the parser below.
+		projectName = "project with spaces [test]"
+	}
+	root := filepath.Join(t.TempDir(), projectName)
 	if err := os.Mkdir(root, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +127,10 @@ func TestCompilationRecipeTokenization(t *testing.T) {
 			t.Fatalf("accepted unsupported recipe: %s", line)
 		}
 	}
-	root := t.TempDir()
+	root := filepath.Join(t.TempDir(), "project ü [test] Кириллица")
+	if err := os.Mkdir(root, 0755); err != nil {
+		t.Fatal(err)
+	}
 	gxx := filepath.Join(root, "arm-none-eabi-g++")
 	gcc := filepath.Join(root, "arm-none-eabi-gcc")
 	if runtime.GOOS == "windows" {
@@ -134,5 +143,8 @@ func TestCompilationRecipeTokenization(t *testing.T) {
 	commands, err := parseCompileCommands(root, gcc, "echo noise\ndauhuniec-cc -c startup.s\ndauhuniec-cxx -std=gnu++17 -c main.cpp -o main.o\n", runtime.GOOS == "windows")
 	if err != nil || len(commands) != 1 || commands[0].Arguments[0] != gxx {
 		t.Fatalf("C++ database: %+v %v", commands, err)
+	}
+	if commands[0].Directory != root || commands[0].File != filepath.Join(root, "main.cpp") {
+		t.Fatalf("Unicode project paths changed: %+v", commands[0])
 	}
 }
