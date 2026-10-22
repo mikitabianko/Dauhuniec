@@ -253,6 +253,9 @@ func TestWindowsDiscoversCubeIDEMakeWithoutShell(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("Windows tool discovery")
 	}
+	// Exercise the bundled-Make fallback without an independent Make from the
+	// runner's PATH, which discovery is allowed to prefer.
+	t.Setenv("PATH", "")
 	plugins, oldMake := fakeTools(t)
 	assertSameFile := func(got, want string) {
 		t.Helper()

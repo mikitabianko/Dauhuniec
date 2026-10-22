@@ -200,8 +200,52 @@ func migrateSettings(old map[string]any) {
 	delete(old, "dauhuniec.shell")
 }
 
+func configureWorkspaceSettings(root string, cfg config, settings map[string]any, previous map[string]string) error {
+	data, err := assets.ReadFile("templates/vscode/settings.json")
+	if err != nil {
+		return err
+	}
+	var defaults map[string]any
+	if err := json.Unmarshal(data, &defaults); err != nil {
+		return err
+	}
+	migrateSettings(settings)
+	hasCMakeProject := regularFile(filepath.Join(root, "CMakeLists.txt"))
+	for key, value := range defaults {
+		// Vendor CMakeLists.txt files do not make a CubeMX Makefile project a
+		// CMake project. Leave real root CMake projects' configuration alone.
+		if hasCMakeProject && (strings.HasPrefix(key, "cmake.") || key == "stm32cube-ide-build-cmake.ignoreCubeProjectDiscovery") {
+			continue
+		}
+		if language, ok := value.(map[string]any); ok {
+			merged, ok := settings[key].(map[string]any)
+			if !ok {
+				merged = map[string]any{}
+			}
+			for name, setting := range language {
+				merged[name] = setting
+			}
+			settings[key] = merged
+		} else {
+			settings[key] = value
+		}
+	}
+	settings["clangd.arguments"] = clangdArguments(root, cfg.Tools["gcc"], settings["clangd.arguments"])
+	for key, value := range cfg.Tools {
+		if chosen, ok := settings["dauhuniec."+key].(string); ok && chosen != "" && chosen != previous[key] {
+			continue
+		}
+		settings["dauhuniec."+key] = value
+	}
+	settings["dauhuniec.runner"] = filepath.Join(root, stateDir, binaryName())
+	settings["dauhuniec.programmerDir"] = filepath.Dir(cfg.Tools["programmer"])
+	settings["dauhuniec.elf"], settings["dauhuniec.device"] = elfPath(root, cfg.Project), cfg.Project.Device
+	return nil
+}
+
 func configureVSCode(root, plugins string, cfg config) error {
 	destination := filepath.Join(root, ".vscode")
+	previous := savedTools(root)
 	documents := make(map[string]map[string]any)
 	files := []string{"tasks.json", "launch.json", "c_cpp_properties.json", "extensions.json", "settings.json"}
 	for _, name := range files {
@@ -210,13 +254,9 @@ func configureVSCode(root, plugins string, cfg config) error {
 			return err
 		}
 		if name == "settings.json" {
-			migrateSettings(old)
-			for key, value := range cfg.Tools {
-				old["dauhuniec."+key] = value
+			if err := configureWorkspaceSettings(root, cfg, old, previous); err != nil {
+				return err
 			}
-			old["dauhuniec.runner"] = filepath.Join(root, stateDir, binaryName())
-			old["dauhuniec.programmerDir"] = filepath.Dir(cfg.Tools["programmer"])
-			old["dauhuniec.elf"], old["dauhuniec.device"] = elfPath(root, cfg.Project), cfg.Project.Device
 			documents[name] = old
 			continue
 		}
@@ -257,7 +297,13 @@ func configureVSCode(root, plugins string, cfg config) error {
 			if len(prefix) > 9 {
 				prefix = prefix[:9]
 			}
-			svds, _ := filepath.Glob(filepath.Join(plugins, "com.st.stm32cube.ide.mcu.productdb.debug_*", "resources/cmsis/STMicroelectronics_CMSIS_SVD", prefix+".svd"))
+			var svds []string
+			for _, dir := range children(plugins, func(n string) bool { return strings.HasPrefix(n, "com.st.stm32cube.ide.mcu.productdb.debug_") }) {
+				candidate := filepath.Join(dir, "resources/cmsis/STMicroelectronics_CMSIS_SVD", prefix+".svd")
+				if regularFile(candidate) {
+					svds = append(svds, candidate)
+				}
+			}
 			descending(svds)
 			if len(svds) > 0 {
 				for _, entry := range fresh["configurations"].([]any) {
@@ -270,7 +316,7 @@ func configureVSCode(root, plugins string, cfg config) error {
 			})
 		case "c_cpp_properties.json":
 			entries := fresh["configurations"].([]any)
-			entries[0] = compilerConfiguration(root, entries[0].(map[string]any))
+			entries[0].(map[string]any)["compileCommands"] = []string{"${workspaceFolder}/" + stateDir + "/compile_commands.json"}
 			old["configurations"] = mergeEntries(old["configurations"], entries, func(item map[string]any) bool {
 				return item["compilerPath"] == "${config:dauhuniec.gcc}" || item["name"] == "Dauhuniec" || item["compilerPath"] == "${config:lon.gcc}" || item["name"] == "Lon-daŭhuniec" || item["compilerPath"] == "${config:codeready.gcc}" || item["name"] == "CodeReady"
 			})
@@ -279,7 +325,7 @@ func configureVSCode(root, plugins string, cfg config) error {
 			for _, value := range []any{old["recommendations"], fresh["recommendations"]} {
 				if entries, ok := value.([]any); ok {
 					for _, entry := range entries {
-						if name, ok := entry.(string); ok {
+						if name, ok := entry.(string); ok && name != "ms-vscode.cpptools" {
 							values = append(values, name)
 						}
 					}
@@ -315,4 +361,35 @@ func configureVSCode(root, plugins string, cfg config) error {
 		}
 	}
 	return nil
+}
+
+// Replace only arguments owned by setup; preserve unrelated user options.
+func clangdArguments(root, gcc string, previous any) []string {
+	args := []string{}
+	if values, ok := previous.([]any); ok {
+		for i := 0; i < len(values); i++ {
+			value, ok := values[i].(string)
+			if !ok {
+				continue
+			}
+			if value == "--compile-commands-dir" || value == "--query-driver" {
+				i++
+				continue
+			}
+			if strings.HasPrefix(value, "--compile-commands-dir=") || strings.HasPrefix(value, "--query-driver=") || value == "--background-index" || strings.HasPrefix(value, "--background-index=") {
+				continue
+			}
+			args = append(args, value)
+		}
+	}
+	args = append(args, "--background-index", "--compile-commands-dir="+filepath.Join(root, stateDir))
+	if gcc != "" {
+		driver := filepath.ToSlash(gcc)
+		cxx := strings.TrimSuffix(strings.TrimSuffix(driver, ".exe"), "gcc") + "g++"
+		if strings.HasSuffix(driver, ".exe") {
+			cxx += ".exe"
+		}
+		args = append(args, "--query-driver="+driver+","+cxx)
+	}
+	return args
 }

@@ -1,0 +1,20 @@
+{
+  "C_Cpp.intelliSenseEngine": "disabled",
+  "clangd.enable": true,
+  "clangd.enableCodeCompletion": true,
+  "clangd.enableHover": true,
+  "stm32cube-ide-clangd.enable": false,
+  "editor.semanticHighlighting.enabled": true,
+  "[c]": {
+    "editor.semanticHighlighting.enabled": true
+  },
+  "[cpp]": {
+    "editor.semanticHighlighting.enabled": true
+  },
+  "cmake.sourceDirectory": "${workspaceFolder}",
+  "cmake.autoDetectSourceDirectory": false,
+  "cmake.configureOnOpen": false,
+  "cmake.configureOnEdit": false,
+  "cmake.ignoreCMakeListsMissing": true,
+  "stm32cube-ide-build-cmake.ignoreCubeProjectDiscovery": true
+}

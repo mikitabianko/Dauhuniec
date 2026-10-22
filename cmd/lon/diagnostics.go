@@ -27,6 +27,8 @@ type discovery struct {
 }
 
 type report struct {
+	BuildPreset   string            `json:"buildPreset,omitempty"`
+	ToolDiscovery *toolsReport      `json:"toolDiscovery,omitempty"`
 	SchemaVersion int               `json:"schemaVersion"`
 	Version       string            `json:"version"`
 	Root          string            `json:"root"`
@@ -53,73 +55,20 @@ func savedTools(root string) map[string]string {
 }
 
 func discoverTools(opts options, previous map[string]string) discovery {
-	d := discovery{Tools: make(map[string]string)}
-	ide := opts.ide
-	if ide == "" && regularFile(previous["gcc"]) {
-		ide = filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(previous["gcc"]))))
+	if runtime.GOOS == "windows" && previous["shell"] != "" && opts.make == previous["make"] {
+		opts.make = ""
 	}
-	plugins, err := findPlugins(ide)
-	if err != nil {
-		d.Checks = append(d.Checks, check{"cubeide", "STM32CubeIDE tools", "error", err.Error(), "selectCubeIDE"})
-	} else {
-		d.Plugins = plugins
-		d.Checks = append(d.Checks, check{"cubeide", "STM32CubeIDE tools", "ok", plugins, ""})
-		for _, tool := range []struct{ key, family, binary string }{
-			{"gcc", "gnu-tools-for-stm32", "arm-none-eabi-gcc"},
-			{"gdb", "gnu-tools-for-stm32", "arm-none-eabi-gdb"},
-			{"objcopy", "gnu-tools-for-stm32", "arm-none-eabi-objcopy"},
-			{"objdump", "gnu-tools-for-stm32", "arm-none-eabi-objdump"},
-			{"nm", "gnu-tools-for-stm32", "arm-none-eabi-nm"},
-			{"size", "gnu-tools-for-stm32", "arm-none-eabi-size"},
-			{"server", "stlink-gdb-server", "ST-LINK_gdbserver"},
-			{"programmer", "cubeprogrammer", "STM32_Programmer_CLI"},
-		} {
-			path, err := findTool(plugins, tool.family, tool.binary)
-			if err != nil {
-				d.Checks = append(d.Checks, check{tool.key, tool.binary, "error", err.Error(), "selectCubeIDE"})
-			} else {
-				d.Tools[tool.key] = path
-				d.Checks = append(d.Checks, check{tool.key, tool.binary, "ok", path, ""})
-			}
+	r := discoverShared(currentToolHost(), opts, previous, false)
+	d := discovery{Tools: r.Tools}
+	for _, c := range r.Checks {
+		if c.ID != "cubeMX" {
+			d.Checks = append(d.Checks, c)
 		}
 	}
-	makePath := findMake(opts.make, plugins, previous)
-	if !regularFile(makePath) {
-		message, action := "Install GNU Make, or choose its executable.", "selectMake"
-		if runtime.GOOS == "windows" {
-			message, action = "Native GNU Make not found; select a full STM32CubeIDE installation including its Make tools.", "selectCubeIDE"
-		}
-		d.Checks = append(d.Checks, check{"make", "GNU Make", "error", message, action})
-	} else if path, err := canonical(makePath); err != nil {
-		d.Checks = append(d.Checks, check{"make", "GNU Make", "error", err.Error(), "selectMake"})
-	} else {
-		d.Tools["make"] = path
-		d.Checks = append(d.Checks, check{"make", "GNU Make", "ok", path, ""})
+	if c, ok := r.Details["cubeIDE"]; ok {
+		d.Plugins = c.Installation
 	}
 	return d
-}
-
-func findMake(explicit, plugins string, previous map[string]string) string {
-	if runtime.GOOS == "windows" && previous["shell"] != "" && explicit == previous["make"] {
-		explicit = ""
-	}
-	if explicit != "" {
-		return explicit
-	}
-	if runtime.GOOS == "windows" {
-		// Saved MSYS Make depends on a separate runtime and shell. Use native
-		// Make from the selected CubeIDE installation instead.
-		if plugins == "" {
-			return ""
-		}
-		path, _ := findTool(plugins, "make", "make")
-		return path
-	}
-	if regularFile(previous["make"]) {
-		return previous["make"]
-	}
-	path, _ := exec.LookPath("make")
-	return path
 }
 
 func checkErrors(checks []check) string {
@@ -138,11 +87,22 @@ func inspect(root string, opts options, verify bool) report {
 	if err != nil {
 		r.Checks = append(r.Checks, check{"project", "CubeMX project", "error", err.Error(), "generateMakefile"})
 	} else {
+		effective, presetErr := applyBuildPreset(root, config{Project: p}, opts.preset)
+		if presetErr != nil {
+			r.Checks = append(r.Checks, check{"buildPreset", "Build preset", "error", presetErr.Error(), "editBuildPresets"})
+		} else {
+			p = effective.Project
+			r.BuildPreset = effective.Preset
+		}
 		r.Project = &p
 		r.Checks = append(r.Checks, check{"project", "CubeMX project", "ok", p.Target + " · " + p.Device, ""})
 	}
 	d := discoverTools(opts, savedTools(root))
 	r.Tools = d.Tools
+	if opts.diagnostics {
+		shared := discoverShared(currentToolHost(), opts, savedTools(root), true)
+		r.ToolDiscovery = &shared
+	}
 	r.Checks = append(r.Checks, d.Checks...)
 	if verify {
 		for _, key := range []string{"gcc", "gdb", "make"} {
@@ -167,15 +127,9 @@ func inspect(root string, opts options, verify bool) report {
 			r.Checks = append(r.Checks, check{key + ".launch", key + " launch", status, message, action})
 		}
 	}
-	if existing, err := loadConfig(root); err == nil {
-		sameTools := true
-		for key, path := range d.Tools {
-			if existing.Tools[key] != path {
-				sameTools = false
-			}
-		}
+	if _, err := loadConfigFor(root, "clean"); err == nil {
 		settings, err := readObject(filepath.Join(root, ".vscode/settings.json"))
-		if sameTools && err == nil && settings["dauhuniec.runner"] == filepath.Join(root, stateDir, binaryName()) && regularFile(filepath.Join(root, ".vscode/tasks.json")) {
+		if err == nil && settings["dauhuniec.runner"] == filepath.Join(root, stateDir, binaryName()) && regularFile(filepath.Join(root, ".vscode/tasks.json")) {
 			r.Configured = true
 		}
 	}

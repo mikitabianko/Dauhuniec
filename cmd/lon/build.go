@@ -8,18 +8,23 @@ import (
 )
 
 func build(root string, cfg config, execute runner) error {
-	if runtime.GOOS == "windows" {
-		// CubeMX's mkdir recipe uses Unix flags. Create its target ourselves so
-		// Make never needs that recipe, including after Clean or regeneration.
-		if err := checkBuildDir(root, cfg.Project.BuildDir); err != nil {
-			return err
-		}
-		if err := os.MkdirAll(filepath.Join(root, cfg.Project.BuildDir), 0755); err != nil {
-			return err
-		}
+	// CubeMX may emit plain mkdir, which cannot create nested preset paths.
+	// Create the complete output path on every platform, also after Clean.
+	if err := checkBuildDir(root, cfg.Project.BuildDir); err != nil {
+		return err
 	}
+	if err := os.MkdirAll(filepath.Join(root, cfg.Project.BuildDir), 0755); err != nil {
+		return err
+	}
+	args, cleanup, err := presetMakeArgs(root, cfg)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
 	environment := buildEnvironment(cfg)
-	command := []string{cfg.Tools["make"], "-j2", "GCC_PATH=", "PREFIX=arm-none-eabi-", "DEBUG=1", "OPT=-Og", "all"}
+	command := []string{cfg.Tools["make"], "-j2", "GCC_PATH=", "PREFIX=arm-none-eabi-"}
+	command = append(command, args...)
+	command = append(command, "all")
 	if runtime.GOOS == "windows" {
 		command = append(command, "SHELL=cmd.exe", ".SHELLFLAGS=/c")
 	}

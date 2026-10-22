@@ -6,7 +6,9 @@
       "type": "process",
       "command": "${config:dauhuniec.runner}",
       "args": [
-        "build"
+        "build",
+        "--project",
+        "${workspaceFolder}"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -24,7 +26,9 @@
       "type": "process",
       "command": "${config:dauhuniec.runner}",
       "args": [
-        "clean"
+        "clean",
+        "--project",
+        "${workspaceFolder}"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -36,7 +40,9 @@
       "type": "process",
       "command": "${config:dauhuniec.runner}",
       "args": [
-        "flash"
+        "flash",
+        "--project",
+        "${workspaceFolder}"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -50,7 +56,9 @@
       "type": "process",
       "command": "${config:dauhuniec.runner}",
       "args": [
-        "doctor"
+        "doctor",
+        "--project",
+        "${workspaceFolder}"
       ],
       "options": {
         "cwd": "${workspaceFolder}"
@@ -62,7 +70,9 @@
       "type": "process",
       "command": "${config:dauhuniec.runner}",
       "args": [
-        "list-probes"
+        "list-probes",
+        "--project",
+        "${workspaceFolder}"
       ],
       "options": {
         "cwd": "${workspaceFolder}"

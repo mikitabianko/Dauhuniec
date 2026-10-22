@@ -75,3 +75,22 @@ test('debug uses the selected serial and removes conflicting old server argument
   assert.equal(configuration.serialNumber, a.serial);
   assert.deepEqual(configuration.serverArgs, ['-k','-p','3333']);
 });
+
+test('old Debug and Attach configurations pass the server path to Cortex-Debug without editing the launch file', () => {
+  for (const request of ['launch', 'attach']) {
+    const original = { name: 'Dauhuniec: Debug', request, serverPath: '${config:dauhuniec.server}' };
+    const configuration = pinDebugTarget(original, a.serial);
+    assert.equal(configuration.serverpath, '${config:dauhuniec.server}');
+    assert.equal('serverPath' in configuration, false);
+    assert.equal(original.serverPath, '${config:dauhuniec.server}', 'leave the source configuration intact');
+    assert.equal(configuration.serialNumber, a.serial);
+    assert.equal(configuration.request, request);
+  }
+});
+
+test('an explicit Cortex-Debug serverpath takes precedence over the old spelling', () => {
+  const configuration = pinDebugTarget({ serverpath: '/custom/server', serverPath: '/old/server' }, a.serial);
+  assert.equal(configuration.serverpath, '/custom/server');
+  assert.equal('serverPath' in configuration, false);
+  assert.equal('serverpath' in pinDebugTarget({ name: 'Dauhuniec: Debug' }, a.serial), false);
+});
